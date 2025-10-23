@@ -588,14 +588,362 @@ class ClaudeService:
 # See Chapter 16 for complete Claude Agents implementation
 ```
 
-### 8. Multi-Provider Abstraction
+### 8. Extended Thinking Mode ⭐ CLAUDE UNIQUE FEATURE
+
+```python
+class ClaudeService:
+    async def chat_with_thinking(
+        self,
+        prompt: str,
+        model: str = "claude-sonnet-4-20250514"
+    ) -> Dict:
+        """
+        Claude's extended thinking mode for complex reasoning
+        Claude will "think" through the problem before responding
+        """
+        system_prompt = """You are Claude with extended thinking capabilities.
+
+        When faced with complex problems:
+        1. Think step-by-step through the problem
+        2. Consider multiple approaches
+        3. Evaluate trade-offs
+        4. Arrive at the best solution
+
+        Show your thinking process using <thinking> tags, then provide the final answer."""
+
+        messages = [{"role": "user", "content": prompt}]
+
+        response = await self.chat(
+            messages=messages,
+            system_prompt=system_prompt,
+            model=model,
+            max_tokens=8192  # Give Claude room to think
+        )
+
+        # Parse thinking blocks and final answer
+        import re
+
+        thinking_match = re.search(r'<thinking>(.*?)</thinking>', response, re.DOTALL)
+        thinking_process = thinking_match.group(1).strip() if thinking_match else None
+
+        # Get final answer (everything after thinking)
+        if thinking_process:
+            final_answer = re.sub(r'<thinking>.*?</thinking>', '', response, flags=re.DOTALL).strip()
+        else:
+            final_answer = response
+
+        return {
+            "thinking_process": thinking_process,
+            "answer": final_answer,
+            "used_thinking": thinking_process is not None
+        }
+
+    async def solve_complex_problem(
+        self,
+        problem: str,
+        context: str = "",
+        model: str = "claude-sonnet-4-20250514"
+    ) -> Dict:
+        """
+        Solve complex problems with Claude's reasoning
+        Perfect for: architecture decisions, debugging, optimization
+        """
+        prompt = f"""Analyze this problem carefully and provide a well-reasoned solution.
+
+Problem: {problem}
+
+{f"Context: {context}" if context else ""}
+
+Think through multiple approaches, consider trade-offs, and recommend the best solution."""
+
+        result = await self.chat_with_thinking(prompt, model)
+
+        return result
+
+# FastAPI endpoint
+@router.post("/claude/think")
+async def claude_thinking(problem: str, context: str = ""):
+    """
+    Complex problem solving with thinking mode
+    Example: "Should we use microservices or monolith for our new app?"
+    """
+    result = await claude_service.solve_complex_problem(problem, context)
+    return result
+```
+
+### 9. Native Tool Chaining ⭐ CLAUDE UNIQUE FEATURE
+
+```python
+class ClaudeService:
+    async def chat_with_tool_chain(
+        self,
+        prompt: str,
+        tools: List[Dict],
+        model: str = "claude-sonnet-4-20250514"
+    ) -> Dict:
+        """
+        Claude can chain multiple tools naturally
+        Better at multi-step workflows than other providers
+        """
+        messages = [{"role": "user", "content": prompt}]
+
+        execution_log = []
+        max_iterations = 10
+        iteration = 0
+
+        while iteration < max_iterations:
+            response = await self.client.messages.create(
+                model=model,
+                max_tokens=4096,
+                messages=messages,
+                tools=tools
+            )
+
+            # Check for tool use
+            if response.stop_reason == "tool_use":
+                tool_calls = []
+
+                for content_block in response.content:
+                    if content_block.type == "tool_use":
+                        # Execute tool
+                        result = await self.execute_tool(
+                            content_block.name,
+                            content_block.input
+                        )
+
+                        tool_calls.append({
+                            "tool": content_block.name,
+                            "input": content_block.input,
+                            "output": result
+                        })
+
+                        execution_log.append({
+                            "iteration": iteration,
+                            "tool": content_block.name,
+                            "result": result
+                        })
+
+                # Add assistant message with tool uses
+                messages.append({
+                    "role": "assistant",
+                    "content": response.content
+                })
+
+                # Add tool results
+                tool_results = []
+                for content_block in response.content:
+                    if content_block.type == "tool_use":
+                        result = await self.execute_tool(
+                            content_block.name,
+                            content_block.input
+                        )
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": content_block.id,
+                            "content": json.dumps(result)
+                        })
+
+                messages.append({
+                    "role": "user",
+                    "content": tool_results
+                })
+
+                iteration += 1
+                continue
+
+            # Done with tool chain
+            return {
+                "answer": response.content[0].text,
+                "execution_log": execution_log,
+                "tools_used": len(execution_log),
+                "iterations": iteration
+            }
+
+        return {
+            "error": "Max iterations reached",
+            "execution_log": execution_log
+        }
+
+@router.post("/claude/tool-chain")
+async def tool_chain_endpoint(prompt: str):
+    """
+    Example: "Fetch weather for NYC, then if it's above 70F, find outdoor restaurants,
+    then book a reservation for 2 people at 7pm"
+
+    Claude will chain: weather → restaurant search → booking
+    """
+    tools = [
+        {
+            "name": "get_weather",
+            "description": "Get current weather",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"}
+                },
+                "required": ["location"]
+            }
+        },
+        {
+            "name": "search_restaurants",
+            "description": "Search for restaurants",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"},
+                    "cuisine": {"type": "string"},
+                    "outdoor_seating": {"type": "boolean"}
+                },
+                "required": ["location"]
+            }
+        },
+        {
+            "name": "book_reservation",
+            "description": "Book restaurant reservation",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "restaurant_id": {"type": "string"},
+                    "party_size": {"type": "integer"},
+                    "time": {"type": "string"}
+                },
+                "required": ["restaurant_id", "party_size", "time"]
+            }
+        }
+    ]
+
+    result = await claude_service.chat_with_tool_chain(prompt, tools)
+    return result
+```
+
+### 10. Code Generation with Self-Validation ⭐ CLAUDE UNIQUE FEATURE
+
+```python
+class ClaudeService:
+    async def generate_and_validate_code(
+        self,
+        specification: str,
+        language: str = "python",
+        model: str = "claude-sonnet-4-20250514"
+    ) -> Dict:
+        """
+        Claude generates code and validates it
+        Similar to how Windsurf uses Claude Sonnet 4.5
+        """
+        prompt = f"""Generate {language} code for this specification:
+
+{specification}
+
+Requirements:
+1. Write clean, well-documented code
+2. Include type hints (if applicable)
+3. Add error handling
+4. Write unit tests to validate the code
+5. Execute the tests to verify correctness
+
+Show your work step-by-step."""
+
+        messages = [{"role": "user", "content": prompt}]
+
+        # Enable code execution if using appropriate tools
+        tools = [
+            {
+                "name": "execute_code",
+                "description": "Execute code and return output",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string"},
+                        "language": {"type": "string"}
+                    },
+                    "required": ["code", "language"]
+                }
+            },
+            {
+                "name": "run_tests",
+                "description": "Run unit tests",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "test_code": {"type": "string"},
+                        "target_code": {"type": "string"}
+                    },
+                    "required": ["test_code", "target_code"]
+                }
+            }
+        ]
+
+        result = await self.chat_with_tool_chain(prompt, tools, model)
+
+        return {
+            "specification": specification,
+            "code_generated": True,
+            "tests_run": result["tools_used"] > 0,
+            "result": result["answer"],
+            "execution_log": result["execution_log"]
+        }
+
+    async def refactor_code(
+        self,
+        code: str,
+        refactoring_goal: str,
+        model: str = "claude-sonnet-4-20250514"
+    ) -> Dict:
+        """
+        Refactor code with Claude's superior code understanding
+        """
+        prompt = f"""Refactor this code to: {refactoring_goal}
+
+Original code:
+```
+
+{code}
+
+```
+
+Provide:
+1. Refactored code
+2. Explanation of changes
+3. Before/after comparison
+4. Tests to verify functionality is preserved"""
+
+        result = await self.chat_with_thinking(prompt, model)
+
+        return {
+            "original_code": code,
+            "refactoring_goal": refactoring_goal,
+            "thinking_process": result["thinking_process"],
+            "refactored_solution": result["answer"]
+        }
+
+@router.post("/claude/generate-code")
+async def generate_code(specification: str, language: str = "python"):
+    """
+    Generate and validate code with Claude
+    Example: "Create a binary search tree with insert, delete, and search operations"
+    """
+    result = await claude_service.generate_and_validate_code(specification, language)
+    return result
+
+@router.post("/claude/refactor")
+async def refactor_code(code: str, goal: str):
+    """
+    Refactor code with Claude
+    Example goal: "improve performance" or "add type safety"
+    """
+    result = await claude_service.refactor_code(code, goal)
+    return result
+```
+
+### 11. Multi-Provider Abstraction with Gemini
 
 ```python
 from abc import ABC, abstractmethod
 from typing import List, Dict, AsyncIterator
+import google.generativeai as genai
 
 class LLMProvider(ABC):
-    """Abstract base for LLM providers"""
+    """Abstract base for LLM providers (OpenAI, Claude, Gemini)"""
 
     @abstractmethod
     async def chat(
@@ -623,16 +971,16 @@ class OpenAIProvider(LLMProvider):
 
     async def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
         response = await self.client.chat.completions.create(
-            model=kwargs.get("model", "gpt-4-turbo-preview"),
+            model=kwargs.get("model", "gpt-5-turbo"),  # Updated to GPT-5
             messages=messages,
             temperature=kwargs.get("temperature", 0.7),
-            max_tokens=kwargs.get("max_tokens", 1000)
+            max_tokens=kwargs.get("max_tokens", 4096)
         )
         return response.choices[0].message.content
 
     async def chat_stream(self, messages: List[Dict[str, str]], **kwargs):
         stream = await self.client.chat.completions.create(
-            model=kwargs.get("model", "gpt-4-turbo-preview"),
+            model=kwargs.get("model", "gpt-5-turbo"),  # Updated to GPT-5
             messages=messages,
             stream=True
         )
@@ -642,7 +990,7 @@ class OpenAIProvider(LLMProvider):
 
     def count_tokens(self, text: str) -> int:
         import tiktoken
-        encoding = tiktoken.encoding_for_model("gpt-4")
+        encoding = tiktoken.encoding_for_model("gpt-5")
         return len(encoding.encode(text))
 
 class ClaudeProvider(LLMProvider):
@@ -684,11 +1032,51 @@ class ClaudeProvider(LLMProvider):
         # Approximate - Claude uses similar tokenization
         return len(text) // 4
 
+class GeminiProvider(LLMProvider):
+    """Gemini provider implementation"""
+
+    def __init__(self):
+        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        self.model = genai.GenerativeModel("gemini-2.0-pro")
+
+    async def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        import asyncio
+
+        # Convert messages to Gemini format
+        prompt = messages[-1]["content"] if messages else ""
+
+        response = await asyncio.to_thread(
+            self.model.generate_content,
+            prompt
+        )
+
+        return response.text
+
+    async def chat_stream(self, messages: List[Dict[str, str]], **kwargs):
+        import asyncio
+
+        prompt = messages[-1]["content"] if messages else ""
+
+        response = await asyncio.to_thread(
+            self.model.generate_content,
+            prompt,
+            stream=True
+        )
+
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+
+    def count_tokens(self, text: str) -> int:
+        # Approximate
+        return len(text) // 4
+
 # Factory pattern
 class LLMFactory:
     _providers = {
         "openai": OpenAIProvider,
-        "claude": ClaudeProvider
+        "claude": ClaudeProvider,
+        "gemini": GeminiProvider  # Add Gemini support
     }
 
     @classmethod
@@ -705,7 +1093,7 @@ class LLMFactory:
 @router.post("/ai/chat")
 async def universal_chat(
     messages: List[Message],
-    provider: str = "openai",  # or "claude"
+    provider: str = "openai",  # "openai", "claude", or "gemini"
     **kwargs
 ):
     """Universal chat endpoint supporting multiple providers"""
@@ -721,7 +1109,7 @@ async def universal_chat(
 @router.post("/ai/chat/stream")
 async def universal_stream(
     messages: List[Message],
-    provider: str = "openai"
+    provider: str = "openai"  # "openai", "claude", or "gemini"
 ):
     """Universal streaming endpoint"""
     llm = LLMFactory.get_provider(provider)
@@ -733,20 +1121,133 @@ async def universal_stream(
     )
 ```
 
-## 🔄 Claude vs OpenAI: Use Case Guide
+### 12. Provider Selection Strategy
 
-| Use Case             | Recommended             | Reason                           |
-| -------------------- | ----------------------- | -------------------------------- |
-| **Code Generation**  | Claude Sonnet 4.5       | Superior code understanding      |
-| **Creative Writing** | GPT-4                   | More creative, varied output     |
-| **Data Analysis**    | Claude Sonnet           | Better reasoning, long contexts  |
-| **Quick Tasks**      | Claude Haiku or GPT-3.5 | Cost-effective, fast             |
-| **Vision Tasks**     | Claude 3 Opus or GPT-4V | Both excellent, preference-based |
-| **Function Calling** | OpenAI GPT-4            | More mature tooling              |
-| **Agents**           | Claude Sonnet 4.5       | Superior multi-step reasoning    |
-| **Long Documents**   | Claude (200K context)   | 2x the context window            |
-| **Cost-Sensitive**   | Claude Haiku            | Cheapest per token               |
-| **Image Generation** | DALL-E 3 (OpenAI only)  | Claude doesn't generate images   |
+```python
+class ProviderRouter:
+    """Intelligently route requests to the best provider"""
+
+    @staticmethod
+    def select_provider(
+        task_type: str,
+        context_length: int = 0,
+        cost_priority: str = "balanced",
+        features_needed: List[str] = None
+    ) -> str:
+        """
+        Select best provider based on requirements
+
+        Args:
+            task_type: "code", "reasoning", "multimodal", "grounding", "creative"
+            context_length: Number of tokens in context
+            cost_priority: "low", "balanced", "high_quality"
+            features_needed: ["video", "search", "caching", etc.]
+        """
+        features_needed = features_needed or []
+
+        # Gemini for grounding and multimodal
+        if "grounding" in features_needed or "search" in features_needed:
+            return "gemini"
+
+        if "video" in features_needed or "audio" in features_needed:
+            return "gemini"  # Gemini has best multimodal support
+
+        # Claude for code generation
+        if task_type == "code":
+            return "claude"
+
+        # GPT-5 for complex reasoning
+        if task_type == "reasoning" and context_length > 100000:
+            return "openai"  # GPT-5 has largest context
+
+        # Cost-based routing
+        if cost_priority == "low":
+            if context_length < 10000:
+                return "gemini"  # Gemini Flash is cheapest
+            return "claude"  # Claude Haiku for longer contexts
+
+        if cost_priority == "high_quality":
+            if task_type == "code":
+                return "claude"
+            return "openai"  # GPT-5 for most tasks
+
+        # Balanced: Claude Sonnet 4.5 is great all-around
+        return "claude"
+
+@router.post("/ai/smart-chat")
+async def smart_chat(
+    messages: List[Message],
+    task_type: str = "general",
+    cost_priority: str = "balanced"
+):
+    """
+    Automatically select best provider for the task
+    """
+    # Count context tokens
+    context = " ".join([msg.content for msg in messages])
+    context_length = len(context) // 4
+
+    # Select provider
+    provider = ProviderRouter.select_provider(
+        task_type=task_type,
+        context_length=context_length,
+        cost_priority=cost_priority
+    )
+
+    # Execute with selected provider
+    llm = LLMFactory.get_provider(provider)
+    msgs = [msg.dict() for msg in messages]
+    response = await llm.chat(msgs)
+
+    return {
+        "response": response,
+        "provider_used": provider,
+        "reasoning": f"Selected {provider} for {task_type} task"
+    }
+```
+
+## 🔄 Provider Comparison: Claude vs GPT-5 vs Gemini
+
+| Use Case               | Best Provider      | Reason                                      |
+| ---------------------- | ------------------ | ------------------------------------------- |
+| **Code Generation**    | Claude Sonnet 4.5  | Superior code understanding + self-validate |
+| **Code Refactoring**   | Claude Sonnet 4.5  | Best for complex refactoring                |
+| **Complex Reasoning**  | GPT-5              | Largest context (1M+), best planning        |
+| **Multimodal (Video)** | Gemini 2.0 Pro     | Native video/audio support                  |
+| **Real-time Info**     | Gemini 2.0 Pro     | Grounding with Google Search                |
+| **Data Analysis**      | Gemini 2.0 Pro     | Native code execution                       |
+| **Quick Tasks**        | Gemini Flash       | Fastest + cheapest                          |
+| **Vision Tasks**       | GPT-5 or Gemini    | Both excellent multimodal                   |
+| **Function Calling**   | GPT-5              | Best reliability, parallel execution        |
+| **Agents**             | Claude Sonnet 4.5  | Superior multi-step reasoning + thinking    |
+| **Long Documents**     | Gemini (2M tokens) | Largest context window                      |
+| **Cost-Sensitive**     | Gemini Flash       | Best price/performance                      |
+| **Prompt Caching**     | Claude             | 90% cost reduction with caching             |
+| **Image Generation**   | DALL-E 3 (GPT-5)   | Only GPT-5 supports image generation        |
+
+### When to Use Claude Sonnet 4.5
+
+- ✅ Code generation, refactoring, review
+- ✅ Extended thinking for complex problems
+- ✅ Cost optimization with prompt caching (90% savings)
+- ✅ Multi-step agent workflows
+- ✅ Tool chaining with great reasoning
+
+### When to Use GPT-5
+
+- ✅ Complex reasoning and planning
+- ✅ Massive context needs (1M+ tokens)
+- ✅ Parallel function execution
+- ✅ Structured outputs with strict schemas
+- ✅ Mature ecosystem and tooling
+
+### When to Use Gemini
+
+- ✅ Multimodal with audio/video
+- ✅ Real-time information with grounding
+- ✅ Native code execution for analysis
+- ✅ Cost-sensitive high-volume applications
+- ✅ Fast response times (Flash model)
 
 ## 📝 Exercises
 

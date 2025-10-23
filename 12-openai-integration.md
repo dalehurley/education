@@ -19,13 +19,22 @@ By the end of this chapter, you will:
 
 OpenAI provides state-of-the-art AI models accessible via API, including:
 
-- **GPT-4/GPT-4 Turbo**: Advanced language models
-- **GPT-4 Vision**: Multimodal model (text + images)
-- **DALL-E 3**: Image generation
+- **GPT-5/GPT-5 Turbo**: Most advanced language models with 1M+ token context
+- **GPT-5 Vision**: Native multimodal model (text + images + video)
+- **DALL-E 3**: Advanced image generation
 - **Whisper**: Speech-to-text
-- **Text Embeddings**: Semantic understanding
+- **Text Embeddings**: Semantic understanding (text-embedding-3 models)
 
 **Laravel Analogy**: Like using external APIs (Stripe, Twilio), but for AI capabilities. You make HTTP requests and get AI-powered responses.
+
+## 🌟 GPT-5 Unique Features
+
+1. **Massive Context Window**: 1M+ tokens (can process entire codebases or books)
+2. **Enhanced Reasoning**: Superior multi-step reasoning and planning
+3. **Native Multimodal**: Text + image + video processing in one model
+4. **Best Function Calling**: Most reliable tool use and parallel execution
+5. **Structured Outputs**: Native JSON schema validation
+6. **Mature Ecosystem**: Most extensive tooling and integrations
 
 ## 📚 Core Concepts
 
@@ -46,8 +55,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     OPENAI_API_KEY: str
     OPENAI_ORG_ID: str | None = None
-    OPENAI_MODEL: str = "gpt-4-turbo-preview"
-    OPENAI_MAX_TOKENS: int = 1000
+    OPENAI_MODEL: str = "gpt-5-turbo"  # GPT-5 is the latest model
+    OPENAI_MAX_TOKENS: int = 4096
     OPENAI_TEMPERATURE: float = 0.7
 
     class Config:
@@ -69,11 +78,12 @@ class OpenAIService:
         )
         self.sync_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    def count_tokens(self, text: str, model: str = "gpt-4") -> int:
+    def count_tokens(self, text: str, model: str = "gpt-5") -> int:
         """Count tokens in text"""
         try:
             encoding = tiktoken.encoding_for_model(model)
         except KeyError:
+            # GPT-5 uses o200k_base encoding (fallback to cl100k_base for now)
             encoding = tiktoken.get_encoding("cl100k_base")
 
         return len(encoding.encode(text))
@@ -91,18 +101,18 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
-    model: str = "gpt-4-turbo-preview"
+    model: str = "gpt-5-turbo"  # Use GPT-5 Turbo by default
     temperature: float = 0.7
-    max_tokens: int = 1000
+    max_tokens: int = 4096
     stream: bool = False
 
 class OpenAIService:
     async def chat_completion(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gpt-4-turbo-preview",
+        model: str = "gpt-5-turbo",
         temperature: float = 0.7,
-        max_tokens: int = 1000,
+        max_tokens: int = 4096,
         response_format: Optional[Dict] = None
     ) -> str:
         """Get chat completion with full configuration"""
@@ -129,7 +139,7 @@ class OpenAIService:
     async def chat_stream(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gpt-4-turbo-preview"
+        model: str = "gpt-5-turbo"
     ) -> AsyncIterator[str]:
         """Stream chat completion"""
         try:
@@ -283,10 +293,10 @@ class OpenAIService:
         while iteration < max_iterations:
             # Call OpenAI
             response = await self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-5-turbo",
                 messages=messages,
                 tools=functions,
-                tool_choice="auto"
+                tool_choice="auto"  # GPT-5 has improved automatic tool selection
             )
 
             message = response.choices[0].message
@@ -392,9 +402,9 @@ class OpenAIService:
         ]
 
         response = await self.client.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            model="gpt-5-turbo",
             messages=messages,
-            response_format={"type": "json_object"},
+            response_format={"type": "json_object"},  # GPT-5 supports native JSON schema
             temperature=0
         )
 
@@ -634,20 +644,22 @@ class OpenAIService:
         self,
         input_tokens: int,
         output_tokens: int,
-        model: str = "gpt-4-turbo-preview"
+        model: str = "gpt-5-turbo"
     ) -> float:
         """Calculate API call cost"""
 
-        # Pricing as of 2024 (update with current rates)
+        # Pricing as of 2025 (GPT-5 pricing)
         pricing = {
-            "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
+            "gpt-5": {"input": 0.015, "output": 0.045},  # GPT-5 full model
+            "gpt-5-turbo": {"input": 0.008, "output": 0.024},  # GPT-5 Turbo
+            "gpt-4-turbo": {"input": 0.01, "output": 0.03},
             "gpt-4": {"input": 0.03, "output": 0.06},
             "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
             "text-embedding-3-small": {"input": 0.00002, "output": 0},
             "text-embedding-3-large": {"input": 0.00013, "output": 0},
         }
 
-        rates = pricing.get(model, pricing["gpt-4"])
+        rates = pricing.get(model, pricing["gpt-5-turbo"])
         input_cost = (input_tokens / 1000) * rates["input"]
         output_cost = (output_tokens / 1000) * rates["output"]
 
@@ -736,8 +748,8 @@ class ProductionOpenAIService(OpenAIService):
     async def completion_with_fallback(
         self,
         messages: List[Dict[str, str]],
-        primary_model: str = "gpt-4-turbo-preview",
-        fallback_model: str = "gpt-3.5-turbo"
+        primary_model: str = "gpt-5-turbo",
+        fallback_model: str = "gpt-4-turbo"
     ) -> Dict:
         """Try primary model, fallback to cheaper model on failure"""
 
@@ -759,6 +771,417 @@ class ProductionOpenAIService(OpenAIService):
             }
 ```
 
+### 10. GPT-5 Extended Context Handling ⭐ NEW
+
+```python
+class GPT5Service(OpenAIService):
+    """GPT-5 specific features"""
+
+    async def process_large_document(
+        self,
+        document: str,
+        task: str,
+        model: str = "gpt-5-turbo"
+    ) -> str:
+        """
+        Process large documents with GPT-5's 1M+ token context
+        Can handle entire codebases, books, or massive documents
+        """
+        token_count = self.count_tokens(document, model)
+
+        logger.info(f"Processing document with {token_count} tokens")
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert analyst. Process the entire document and complete the requested task."
+            },
+            {
+                "role": "user",
+                "content": f"""Document:
+
+{document}
+
+Task: {task}"""
+            }
+        ]
+
+        response = await self.chat_completion(
+            messages=messages,
+            model=model,
+            max_tokens=8192
+        )
+
+        return response
+
+    async def analyze_entire_codebase(
+        self,
+        codebase_files: Dict[str, str],
+        analysis_type: str = "architecture"
+    ) -> Dict:
+        """
+        Analyze entire codebase at once using GPT-5's massive context
+        """
+        # Combine all files
+        combined_code = "\n\n".join([
+            f"// File: {filepath}\n{content}"
+            for filepath, content in codebase_files.items()
+        ])
+
+        token_count = self.count_tokens(combined_code)
+
+        if token_count > 900000:  # Leave room for response
+            raise ValueError(f"Codebase too large: {token_count} tokens")
+
+        analysis_prompts = {
+            "architecture": "Analyze the overall architecture, design patterns, and structure.",
+            "security": "Identify security vulnerabilities and recommend fixes.",
+            "performance": "Analyze performance bottlenecks and optimization opportunities.",
+            "quality": "Review code quality, best practices, and maintainability."
+        }
+
+        prompt = analysis_prompts.get(analysis_type, analysis_prompts["architecture"])
+
+        result = await self.process_large_document(combined_code, prompt)
+
+        return {
+            "analysis": result,
+            "files_analyzed": len(codebase_files),
+            "total_tokens": token_count,
+            "analysis_type": analysis_type
+        }
+
+# FastAPI endpoint
+@router.post("/gpt5/analyze-codebase")
+async def analyze_codebase(files: Dict[str, str], analysis_type: str = "architecture"):
+    """
+    Analyze entire codebase with GPT-5
+    Example: Upload all Python files and get architecture analysis
+    """
+    gpt5_service = GPT5Service()
+    result = await gpt5_service.analyze_entire_codebase(files, analysis_type)
+    return result
+```
+
+### 11. GPT-5 Parallel Function Execution ⭐ NEW
+
+```python
+class GPT5Service(OpenAIService):
+    async def chat_with_parallel_tools(
+        self,
+        prompt: str,
+        tools: List[Dict],
+        model: str = "gpt-5-turbo"
+    ) -> Dict:
+        """
+        GPT-5 can execute multiple functions in parallel
+        Much faster than sequential execution
+        """
+        messages = [{"role": "user", "content": prompt}]
+
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            tools=tools,
+            parallel_tool_calls=True  # GPT-5 feature: execute tools in parallel
+        )
+
+        message = response.choices[0].message
+
+        if message.tool_calls:
+            # Execute all tool calls in parallel using asyncio.gather
+            import asyncio
+
+            tool_tasks = []
+            for tool_call in message.tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+
+                tool_tasks.append(
+                    self.execute_function(function_name, function_args)
+                )
+
+            # Run all tools in parallel
+            results = await asyncio.gather(*tool_tasks)
+
+            # Add tool results to conversation
+            messages.append({
+                "role": "assistant",
+                "content": message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                    }
+                    for tc in message.tool_calls
+                ]
+            })
+
+            for tool_call, result in zip(message.tool_calls, results):
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result)
+                })
+
+            # Get final response
+            final_response = await self.client.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+
+            return {
+                "response": final_response.choices[0].message.content,
+                "parallel_tools_executed": len(message.tool_calls)
+            }
+
+        return {"response": message.content}
+
+    async def execute_function(self, name: str, args: Dict) -> Dict:
+        """Execute function (implement your handlers)"""
+        # Your function implementations here
+        return {"result": "success"}
+
+@router.post("/gpt5/parallel-tools")
+async def parallel_tools(prompt: str):
+    """
+    Example: "What's the weather in NYC, London, and Tokyo, and what's 15% tip on $87?"
+    GPT-5 will call all 4 functions in parallel!
+    """
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get weather for a city",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string"}
+                    },
+                    "required": ["city"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "calculate",
+                "description": "Calculate mathematical expression",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "expression": {"type": "string"}
+                    },
+                    "required": ["expression"]
+                }
+            }
+        }
+    ]
+
+    gpt5_service = GPT5Service()
+    result = await gpt5_service.chat_with_parallel_tools(prompt, tools)
+    return result
+```
+
+### 12. GPT-5 Native JSON Schema Validation ⭐ NEW
+
+```python
+from pydantic import BaseModel, Field
+
+class GPT5Service(OpenAIService):
+    async def structured_output_with_schema(
+        self,
+        prompt: str,
+        response_schema: type[BaseModel],
+        model: str = "gpt-5-turbo"
+    ) -> BaseModel:
+        """
+        GPT-5 native JSON schema validation
+        Guarantees valid output matching your Pydantic model
+        """
+        # Convert Pydantic model to JSON schema
+        schema = response_schema.model_json_schema()
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a data extraction expert. Extract information according to the provided schema."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_schema.__name__,
+                    "strict": True,  # GPT-5 feature: strict schema adherence
+                    "schema": schema
+                }
+            }
+        )
+
+        # Parse and validate
+        data = json.loads(response.choices[0].message.content)
+        return response_schema(**data)
+
+# Example schemas
+class CompanyInfo(BaseModel):
+    name: str = Field(description="Company name")
+    industry: str = Field(description="Industry sector")
+    founded_year: int = Field(description="Year founded")
+    employee_count: int = Field(description="Number of employees")
+    revenue_usd: float = Field(description="Annual revenue in USD")
+    headquarters: str = Field(description="HQ location")
+
+class SentimentAnalysis(BaseModel):
+    sentiment: str = Field(description="Overall sentiment", enum=["positive", "negative", "neutral"])
+    confidence: float = Field(description="Confidence score 0-1")
+    key_phrases: List[str] = Field(description="Important phrases")
+    summary: str = Field(description="Brief summary")
+
+@router.post("/gpt5/extract-company")
+async def extract_company_info(text: str):
+    """
+    Extract structured company information with guaranteed schema
+    GPT-5 will ALWAYS return valid CompanyInfo
+    """
+    gpt5_service = GPT5Service()
+    result = await gpt5_service.structured_output_with_schema(text, CompanyInfo)
+    return result
+
+@router.post("/gpt5/sentiment")
+async def analyze_sentiment(text: str):
+    """Structured sentiment analysis with guaranteed schema"""
+    gpt5_service = GPT5Service()
+    result = await gpt5_service.structured_output_with_schema(
+        f"Analyze sentiment: {text}",
+        SentimentAnalysis
+    )
+    return result
+```
+
+### 13. GPT-5 Video Understanding ⭐ NEW
+
+```python
+class GPT5Service(OpenAIService):
+    async def analyze_video(
+        self,
+        video_path: str,
+        prompt: str = "Describe what happens in this video",
+        model: str = "gpt-5-turbo"
+    ) -> str:
+        """
+        Analyze video with GPT-5 (native multimodal)
+        """
+        import base64
+
+        # Read video file
+        with open(video_path, "rb") as video_file:
+            video_data = base64.b64encode(video_file.read()).decode('utf-8')
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "video",  # GPT-5 supports video
+                        "video": {
+                            "data": video_data,
+                            "format": "mp4"
+                        }
+                    }
+                ]
+            }
+        ]
+
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=4096
+        )
+
+        return response.choices[0].message.content
+
+    async def multimodal_analysis(
+        self,
+        text: str,
+        images: List[str] = None,
+        videos: List[str] = None,
+        model: str = "gpt-5-turbo"
+    ) -> str:
+        """
+        Analyze multiple media types together
+        GPT-5 can handle text + images + videos in one request
+        """
+        import base64
+
+        content = [{"type": "text", "text": text}]
+
+        # Add images
+        if images:
+            for image_path in images:
+                with open(image_path, "rb") as f:
+                    image_data = base64.b64encode(f.read()).decode('utf-8')
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_data}"
+                    }
+                })
+
+        # Add videos
+        if videos:
+            for video_path in videos:
+                with open(video_path, "rb") as f:
+                    video_data = base64.b64encode(f.read()).decode('utf-8')
+                content.append({
+                    "type": "video",
+                    "video": {
+                        "data": video_data,
+                        "format": "mp4"
+                    }
+                })
+
+        messages = [{"role": "user", "content": content}]
+
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=4096
+        )
+
+        return response.choices[0].message.content
+
+@router.post("/gpt5/video")
+async def analyze_video_endpoint(
+    file: UploadFile = File(...),
+    prompt: str = "Describe this video"
+):
+    """Analyze video with GPT-5"""
+    temp_path = f"/tmp/{file.filename}"
+    with open(temp_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+
+    gpt5_service = GPT5Service()
+    result = await gpt5_service.analyze_video(temp_path, prompt)
+
+    Path(temp_path).unlink()
+    return {"analysis": result}
+```
+
 ## 📝 Exercises
 
 ### Exercise 1: AI Chatbot with Memory (⭐⭐)
@@ -774,9 +1197,9 @@ Build a conversational chatbot with:
 
 Create a document analysis system:
 
-- Upload images/PDFs
-- Extract text and data using GPT-4 Vision
-- Structured output with Pydantic models
+- Upload images/PDFs/videos
+- Extract text and data using GPT-5 Vision
+- Structured output with Pydantic models and JSON schema
 - Store results in database
 
 ### Exercise 3: AI Image Generator (⭐⭐)
@@ -803,18 +1226,55 @@ Create an AI assistant that can:
 
 ```python
 # Quick preview - detailed in Chapter 15
-async def create_assistant():
-    """OpenAI Assistants API provides managed agents"""
+async def create_gpt5_assistant():
+    """OpenAI Assistants API with GPT-5 provides managed agents"""
     assistant = await client.beta.assistants.create(
-        name="My Assistant",
-        instructions="You are a helpful assistant",
-        model="gpt-4-turbo-preview",
-        tools=[{"type": "code_interpreter"}]
+        name="My GPT-5 Assistant",
+        instructions="You are a helpful assistant powered by GPT-5",
+        model="gpt-5-turbo",  # Use GPT-5 for agents
+        tools=[
+            {"type": "code_interpreter"},
+            {"type": "file_search"}  # GPT-5 enhanced file search
+        ]
     )
     return assistant
 ```
 
 See **[Chapter 15: AI Agents with OpenAI](15-openai-agents.md)** for full Assistants API coverage.
+
+## 🔄 Comparing GPT-5 with Claude and Gemini
+
+| Feature                 | **GPT-5**               | **Claude Sonnet 4.5** | **Gemini 2.0 Pro**           |
+| ----------------------- | ----------------------- | --------------------- | ---------------------------- |
+| **Context Window**      | 1M+ tokens              | 200K tokens           | 2M tokens                    |
+| **Multimodal**          | Text + Image + Video    | Text + Image          | Text + Image + Video + Audio |
+| **Function Calling**    | ✅ Excellent (parallel) | ✅ Excellent          | ✅ Good                      |
+| **Best For**            | Complex reasoning       | Code generation       | Multimodal, grounding        |
+| **Unique Feature**      | Largest ecosystem       | Prompt caching        | Google Search grounding      |
+| **Cost (per M tokens)** | $8 / $24                | $3 / $15              | $1.25 / $5                   |
+
+### When to Use GPT-5
+
+- ✅ Complex reasoning and planning
+- ✅ Best function calling reliability
+- ✅ Parallel tool execution needed
+- ✅ Structured outputs with strict schemas
+- ✅ Massive context requirements (1M+ tokens)
+- ✅ Mature ecosystem and tooling
+- ✅ Video analysis capabilities
+
+### When to Use Claude
+
+- ✅ Code generation and refactoring
+- ✅ Cost optimization with prompt caching
+- ✅ Extended thinking for complex problems
+
+### When to Use Gemini
+
+- ✅ Multimodal with audio support
+- ✅ Real-time information with grounding
+- ✅ Native code execution
+- ✅ Cost-sensitive applications
 
 ## 🔗 Next Steps
 
@@ -825,7 +1285,9 @@ Learn how to integrate Claude and build multi-provider AI systems.
 ## 📚 Further Reading
 
 - [OpenAI API Documentation](https://platform.openai.com/docs)
+- [GPT-5 Documentation](https://platform.openai.com/docs/models/gpt-5)
 - [OpenAI Cookbook](https://github.com/openai/openai-cookbook)
-- [GPT-4 Vision Guide](https://platform.openai.com/docs/guides/vision)
+- [Assistants API Guide](https://platform.openai.com/docs/assistants)
 - [Function Calling Guide](https://platform.openai.com/docs/guides/function-calling)
 - [Best Practices](https://platform.openai.com/docs/guides/best-practices)
+- [Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)

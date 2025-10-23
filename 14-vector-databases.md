@@ -105,6 +105,170 @@ print(f"Similarity cat/feline: {sim_1_2}")  # Similar meaning = high score
 print(f"Similarity cat/python: {sim_1_3}")  # Different = low score
 ```
 
+### 1.5. Gemini Embeddings ⭐ NEW
+
+```python
+import google.generativeai as genai
+import asyncio
+
+class GeminiEmbeddingService:
+    """Gemini embedding service with task-specific embeddings"""
+
+    def __init__(self):
+        genai.configure(api_key=settings.GOOGLE_API_KEY)
+
+    async def create_embedding(
+        self,
+        text: str,
+        model: str = "models/text-embedding-004",
+        task_type: str = "retrieval_document"
+    ) -> List[float]:
+        """
+        Create embedding with Gemini
+
+        Task types (unique to Gemini!):
+        - retrieval_document: For documents to be retrieved
+        - retrieval_query: For search queries
+        - semantic_similarity: For similarity comparison
+        - classification: For classification tasks
+        - clustering: For clustering tasks
+        """
+        result = await asyncio.to_thread(
+            genai.embed_content,
+            model=model,
+            content=text,
+            task_type=task_type
+        )
+
+        return result['embedding']
+
+    async def create_embeddings_batch(
+        self,
+        texts: List[str],
+        model: str = "models/text-embedding-004",
+        task_type: str = "retrieval_document"
+    ) -> List[List[float]]:
+        """Batch create embeddings with Gemini"""
+        embeddings = []
+
+        for text in texts:
+            result = await asyncio.to_thread(
+                genai.embed_content,
+                model=model,
+                content=text,
+                task_type=task_type
+            )
+            embeddings.append(result['embedding'])
+
+        return embeddings
+
+# Example: Using Gemini embeddings
+gemini_embedding_service = GeminiEmbeddingService()
+
+# Create document embeddings
+text1 = "Machine learning is a subset of artificial intelligence"
+text2 = "AI and ML are related technologies"
+
+# Use task-specific embeddings for better results
+doc_emb1 = await gemini_embedding_service.create_embedding(
+    text1,
+    task_type="retrieval_document"
+)
+doc_emb2 = await gemini_embedding_service.create_embedding(
+    text2,
+    task_type="retrieval_document"
+)
+
+# Use different task type for queries
+query = "What is machine learning?"
+query_emb = await gemini_embedding_service.create_embedding(
+    query,
+    task_type="retrieval_query"  # Different task type for queries!
+)
+
+# Calculate similarity
+similarity = embedding_service.cosine_similarity(query_emb, doc_emb1)
+print(f"Query similarity to doc1: {similarity}")
+```
+
+### 1.6. Multi-Provider Embedding Comparison ⭐ NEW
+
+```python
+class MultiProviderEmbeddingService:
+    """Compare embeddings across providers"""
+
+    def __init__(self):
+        self.openai_service = EmbeddingService()
+        self.gemini_service = GeminiEmbeddingService()
+
+    async def compare_embeddings(
+        self,
+        text1: str,
+        text2: str
+    ) -> Dict:
+        """Compare how different providers see similarity"""
+
+        # OpenAI embeddings
+        openai_emb1 = await self.openai_service.create_embedding(text1)
+        openai_emb2 = await self.openai_service.create_embedding(text2)
+        openai_sim = self.openai_service.cosine_similarity(openai_emb1, openai_emb2)
+
+        # Gemini embeddings
+        gemini_emb1 = await self.gemini_service.create_embedding(
+            text1,
+            task_type="semantic_similarity"
+        )
+        gemini_emb2 = await self.gemini_service.create_embedding(
+            text2,
+            task_type="semantic_similarity"
+        )
+        gemini_sim = self.openai_service.cosine_similarity(gemini_emb1, gemini_emb2)
+
+        return {
+            "text1": text1,
+            "text2": text2,
+            "openai": {
+                "similarity": openai_sim,
+                "model": "text-embedding-3-small",
+                "dimensions": len(openai_emb1)
+            },
+            "gemini": {
+                "similarity": gemini_sim,
+                "model": "text-embedding-004",
+                "dimensions": len(gemini_emb1)
+            },
+            "agreement": abs(openai_sim - gemini_sim) < 0.1  # Close agreement
+        }
+
+# FastAPI endpoint
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/embeddings", tags=["Embeddings"])
+
+@router.post("/compare")
+async def compare_providers(text1: str, text2: str):
+    """Compare how OpenAI and Gemini see similarity"""
+    multi_service = MultiProviderEmbeddingService()
+    result = await multi_service.compare_embeddings(text1, text2)
+    return result
+
+@router.post("/gemini")
+async def create_gemini_embedding(
+    text: str,
+    task_type: str = "retrieval_document"
+):
+    """Create Gemini embedding with task type"""
+    gemini_service = GeminiEmbeddingService()
+    embedding = await gemini_service.create_embedding(text, task_type=task_type)
+
+    return {
+        "embedding": embedding,
+        "dimensions": len(embedding),
+        "provider": "gemini",
+        "task_type": task_type
+    }
+```
+
 ### 2. Vector Database Comparison
 
 | Feature                | **ChromaDB**            | **Pinecone**          | **Weaviate**               | **Qdrant**           |

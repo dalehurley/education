@@ -106,24 +106,30 @@ Build AI-powered applications with modern LLMs, agents, and ML tools.
 
 - **[Chapter 12: OpenAI Integration](12-openai-integration.md)**
 
-  - OpenAI API setup and best practices
+  - OpenAI API setup with GPT-5
+  - GPT-5 extended context (1M+ tokens)
   - Chat completions and streaming
-  - Function calling and structured outputs
-  - GPT-4 Vision integration
-  - Image generation with DALL-E
+  - Parallel function calling
+  - Native JSON schema validation
+  - GPT-5 Vision + video analysis
+  - Image generation with DALL-E 3
   - Embeddings and token management
 
 - **[Chapter 13: Claude/Anthropic Integration](13-claude-integration.md)**
 
   - Anthropic API setup
-  - Claude models (Opus, Sonnet 4.5, Haiku)
-  - Extended context windows (100K+ tokens)
+  - Claude Sonnet 4.5 (best for coding)
+  - Extended thinking mode
+  - Extended context windows (200K tokens)
   - Claude 3 vision capabilities
-  - Streaming and prompt caching
-  - Multi-provider abstraction
+  - Prompt caching (90% cost savings)
+  - Native tool chaining
+  - Multi-provider abstraction (OpenAI + Claude + Gemini)
 
 - **[Chapter 14: Vector Databases & Embeddings](14-vector-databases.md)**
-  - Understanding embeddings
+  - Understanding embeddings (OpenAI + Gemini)
+  - Gemini task-specific embeddings
+  - Multi-provider embedding comparison
   - Database comparison (Pinecone, Weaviate, ChromaDB, Qdrant)
   - Production setup and optimization
   - Hybrid search strategies
@@ -133,16 +139,18 @@ Build AI-powered applications with modern LLMs, agents, and ML tools.
 
 - **[Chapter 15: AI Agents with OpenAI](15-openai-agents.md)**
 
-  - OpenAI Assistants API deep dive
+  - GPT-5 Assistants API
   - Agent architecture patterns
-  - Tool/function calling for agents
+  - Parallel tool execution
   - Multi-step reasoning and planning
   - Production agent deployment
   - Real-world agent examples
 
 - **[Chapter 16: AI Agents with Claude](16-claude-agents.md)**
   - Claude Sonnet 4.5 for agents
+  - Extended thinking mode for agents
   - Agent reasoning and tool execution
+  - Code generation with self-validation
   - Claude vs OpenAI agents comparison
   - Production deployment patterns
   - GitHub Copilot and Notion Agent case studies
@@ -152,19 +160,35 @@ Build AI-powered applications with modern LLMs, agents, and ML tools.
 - **[Chapter 17: RAG & Advanced AI Features](17-rag-features.md)**
 
   - Complete RAG implementation
+  - Multi-provider RAG (GPT-5 + Claude + Gemini)
   - Document processing pipelines
   - Advanced retrieval strategies
+  - Provider selection logic
   - LangChain integration
   - Production patterns and monitoring
   - Knowledge base examples
 
 - **[Chapter 18: Production AI/ML & MLOps](18-production-mlops.md)**
+
+  - Multi-provider deployment patterns
   - Fine-tuning guide
   - Local LLMs (Ollama, llama.cpp)
   - Hugging Face ecosystem
   - ML Ops and monitoring
-  - Cost optimization strategies
+  - Cost optimization across providers
+  - Provider health monitoring
   - Safety, ethics, and compliance
+
+- **[Chapter 19: Google Gemini Integration](19-gemini-integration.md)** ⭐ **NEW**
+  - Gemini API setup (Pro, Flash, Ultra)
+  - Native multimodal (text + image + video + audio)
+  - Grounding with Google Search
+  - Code execution for data analysis
+  - Task-specific embeddings
+  - Function calling and tools
+  - Context caching
+  - Production patterns
+  - Comparison with OpenAI and Claude
 
 ## 🚀 Getting Started
 
@@ -206,11 +230,12 @@ By the end of this curriculum, you will:
 - ✅ Implement database operations with SQLAlchemy
 - ✅ Deploy background jobs and caching
 - ✅ Secure APIs with modern authentication
-- ✅ Integrate AI/ML capabilities (OpenAI, Claude, vector DBs)
+- ✅ Integrate AI/ML capabilities (OpenAI GPT-5, Claude, Gemini, vector DBs)
+- ✅ Build multi-provider AI systems with intelligent routing
 - ✅ Build production AI agents with OpenAI and Claude ⭐
-- ✅ Implement advanced RAG systems
+- ✅ Implement advanced RAG systems with multiple providers
 - ✅ Deploy and monitor production AI/ML systems
-- ✅ Optimize costs and ensure AI safety/ethics
+- ✅ Optimize costs across providers and ensure AI safety/ethics
 
 ## 📝 Progress Tracking
 
@@ -221,10 +246,11 @@ Keep track of your progress:
 - [ ] Part 3: Database & Storage (Chapters 6-8)
 - [ ] Part 4: Jobs & Caching (Chapters 9-10)
 - [ ] Part 5: Authentication (Chapter 11)
-- [ ] Part 6: AI Integrations (Chapters 12-18)
-  - [ ] AI Foundations (12-14)
-  - [ ] AI Agents (15-16) ⭐
-  - [ ] Advanced AI/ML (17-18)
+- [ ] Part 6: AI Integrations (Chapters 12-19)
+  - [ ] AI Foundations (12-14) - OpenAI GPT-5, Claude, Gemini, Embeddings
+  - [ ] AI Agents (15-16) ⭐ - GPT-5 & Claude Agents
+  - [ ] Advanced AI/ML (17-18) - RAG, Production, MLOps
+  - [ ] Gemini Integration (19) ⭐ NEW
 
 ---
 
