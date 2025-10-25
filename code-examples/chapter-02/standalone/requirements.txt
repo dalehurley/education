@@ -1,0 +1,7 @@
+# Chapter 02: Shopping Cart System
+
+# Pydantic for data validation (like Laravel Form Requests)
+pydantic>=2.0.0
+
+# Python 3.10+ required for dataclasses and match statements
+

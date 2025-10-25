@@ -1,0 +1,10 @@
+# Chapter 12: AI Writing Assistant
+
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# OpenAI SDK
+openai>=1.0.0
+
+# Python 3.8+ required
+

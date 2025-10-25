@@ -1,0 +1,10 @@
+# Chapter 13: Code Review Assistant
+
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Anthropic Claude SDK
+anthropic>=0.18.0
+
+# Python 3.8+ required
+

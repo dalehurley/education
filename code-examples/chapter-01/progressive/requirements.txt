@@ -1,0 +1,5 @@
+# Chapter 01: Progressive Task Manager V1
+# Uses Python standard library only
+
+# Python 3.8+ required
+

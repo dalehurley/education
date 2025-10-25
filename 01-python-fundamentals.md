@@ -749,14 +749,68 @@ evens = list(filter(lambda x: x % 2 == 0, numbers))
 doubled = list(map(lambda x: x * 2, numbers))
 ```
 
+## 💻 Code Examples
+
+This chapter includes hands-on code examples to practice these concepts:
+
+### Standalone Application
+
+📁 [`code-examples/chapter-01/standalone/`](code-examples/chapter-01/standalone/)
+
+A complete **Task Manager CLI** application demonstrating:
+
+- Variables, types, and type hints
+- Control structures (if/elif/else, loops)
+- Functions with parameters and return values
+- File I/O with context managers
+- List comprehensions and dictionary operations
+- Exception handling
+- Basic classes and magic methods
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-01/standalone
+python task_manager.py
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-01/progressive/`](code-examples/chapter-01/progressive/)
+
+An **Enhanced Task Manager v1** that extends the standalone version with:
+
+- Task priorities (high, medium, low)
+- Due dates and overdue detection
+- Advanced filtering and sorting
+- Statistics and reporting
+- CSV export functionality
+
+This serves as the foundation for Chapter 02's OOP enhancements.
+
+### Code Snippets
+
+📁 [`code-examples/chapter-01/snippets/`](code-examples/chapter-01/snippets/)
+
+Reusable examples for common patterns:
+
+- **`temperature_converter.py`** - Functions and formatting
+- **`data_processing.py`** - List comprehensions and data transformations
+- **`file_analyzer.py`** - File I/O and text processing
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)** for a production-ready application using all concepts from chapters 1-19.
+
 ## 🔗 Next Steps
 
 Now that you understand Python fundamentals:
 
-1. Practice writing Python code daily
-2. Convert simple PHP scripts to Python
-3. Get comfortable with the Python REPL: run `python` in terminal
-4. Install Python linter: `pip install pylint black`
+1. **Run the code examples above** - Get hands-on practice
+2. Practice writing Python code daily
+3. Convert simple PHP scripts to Python
+4. Get comfortable with the Python REPL: run `python` in terminal
+5. Install Python linter: `pip install pylint black`
 
 **Next Chapter:** [Chapter 02: Python OOP and Modern Features](02-python-oop.md)
 

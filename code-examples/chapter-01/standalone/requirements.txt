@@ -1,0 +1,6 @@
+# Chapter 01: Task Manager CLI
+# No external dependencies - uses Python standard library only
+
+# Python 3.8+ required for type hints and other features
+# Install Python from: https://www.python.org/downloads/
+

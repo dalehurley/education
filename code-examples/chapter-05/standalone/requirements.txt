@@ -1,0 +1,10 @@
+# Chapter 05: Authentication API
+
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# JWT for authentication
+PyJWT>=2.8.0
+
+# Python 3.8+ required
+
