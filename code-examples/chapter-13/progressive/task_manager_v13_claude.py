@@ -51,7 +51,7 @@ async def analyze_workload(
     ])
     
     response = claude.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",  # Latest Sonnet 4.5
         max_tokens=2000,
         thinking={
             "type": "enabled",
@@ -88,7 +88,7 @@ async def review_task_plan(
     - Provides constructive feedback
     """
     response = claude.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",  # Latest Sonnet 4.5
         max_tokens=1500,
         messages=[{
             "role": "user",
@@ -134,7 +134,7 @@ async def prioritize_with_claude(
     # CONCEPT: Prompt Caching
     # System message cached for efficiency
     response = claude.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",  # Latest Sonnet 4.5
         max_tokens=1000,
         system=[
             {
@@ -189,7 +189,7 @@ async def smart_task_breakdown(
     }]
     
     response = claude.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",  # Latest Sonnet 4.5
         max_tokens=1500,
         tools=tools,
         messages=[{
@@ -233,7 +233,7 @@ Pending priorities:
 Insights:"""
     
     response = claude.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",  # Latest Sonnet 4.5
         max_tokens=1000,
         messages=[{"role": "user", "content": prompt}]
     )

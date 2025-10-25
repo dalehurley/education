@@ -81,8 +81,8 @@ curl -X POST "http://localhost:8000/generate-tests" \
 
 ```python
 response = anthropic_client.messages.create(
-    model="claude-sonnet-4-20250514",
-    max_tokens=4000,
+    model="claude-sonnet-4-5",  # Latest Sonnet 4.5
+    max_tokens=16384,  # Supports up to 64K
     system="You are a code reviewer",
     messages=[{"role": "user", "content": "Review this code..."}]
 )
@@ -92,7 +92,7 @@ response = anthropic_client.messages.create(
 
 ```python
 response = anthropic_client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-5",
     thinking={"type": "enabled", "budget_tokens": 10000},
     messages=messages
 )
@@ -104,13 +104,14 @@ answer = response.content[1].text
 
 ## 🆚 Claude vs OpenAI
 
-| Feature       | Claude      | OpenAI GPT    |
-| ------------- | ----------- | ------------- |
-| Best for      | Code tasks  | General tasks |
-| Context       | 200K tokens | 128K tokens   |
-| Thinking mode | ✅ Yes      | ❌ No         |
-| Code accuracy | Excellent   | Very good     |
-| Cost          | Similar     | Similar       |
+| Feature       | Claude Sonnet 4.5 | GPT-5           |
+| ------------- | ----------------- | --------------- |
+| Best for      | Code tasks        | Complex tasks   |
+| Context       | 200K / 1M (beta)  | 1M+ tokens      |
+| Max Output    | 64K tokens        | 16K tokens      |
+| Thinking mode | ✅ Native support | ❌ No           |
+| Code accuracy | Excellent         | Very good       |
+| Cost          | $3 / $15 per M    | $15 / $45 per M |
 
 ## 🎯 Use Cases
 

@@ -7,24 +7,31 @@ By the end of this chapter, you will:
 - Understand Python's syntax and how it differs from PHP
 - Work with Python's type system and type hints
 - Master control structures and functions
+- Handle exceptions and errors properly
+- Work with files using context managers
 - Understand Python's module system
 - Set up and manage virtual environments
+- Avoid common pitfalls when transitioning from PHP
 
 ## 🔄 Laravel/PHP Comparison
 
-| Concept          | PHP/Laravel           | Python                  |
-| ---------------- | --------------------- | ----------------------- |
-| File extension   | `.php`                | `.py`                   |
-| Execution        | `<?php` tag required  | No special tags         |
-| Statement ending | Semicolons `;`        | No semicolons (newline) |
-| Blocks           | Curly braces `{}`     | Indentation (4 spaces)  |
-| Comments         | `//` or `/* */`       | `#` or `""" """`        |
-| Variables        | `$variable`           | `variable`              |
-| Constants        | `const` or `define()` | `VARIABLE` (convention) |
-| Null             | `null`                | `None`                  |
-| True/False       | `true`/`false`        | `True`/`False`          |
-| Package manager  | Composer              | pip                     |
-| Dependency file  | `composer.json`       | `requirements.txt`      |
+| Concept              | PHP/Laravel           | Python                     |
+| -------------------- | --------------------- | -------------------------- |
+| File extension       | `.php`                | `.py`                      |
+| Execution            | `<?php` tag required  | No special tags            |
+| Statement ending     | Semicolons `;`        | No semicolons (newline)    |
+| Blocks               | Curly braces `{}`     | Indentation (4 spaces)     |
+| Comments             | `//` or `/* */`       | `#` or `""" """`           |
+| Variables            | `$variable`           | `variable`                 |
+| Constants            | `const` or `define()` | `VARIABLE` (convention)    |
+| Null                 | `null`                | `None`                     |
+| True/False           | `true`/`false`        | `True`/`False`             |
+| String concatenation | `.` operator          | `+` operator or f-string   |
+| Array/List length    | `count($array)`       | `len(list)`                |
+| Print output         | `echo` or `print`     | `print()`                  |
+| Type checking        | `gettype()`           | `type()` or `isinstance()` |
+| Package manager      | Composer              | pip                        |
+| Dependency file      | `composer.json`       | `requirements.txt`         |
 
 ## 📚 Core Concepts
 
@@ -48,7 +55,7 @@ $config = ["key" => "value"];
 name = "John"
 age = 30
 price = 19.99
-is_active = True  # Note: CamelCase for booleans
+is_active = True  # Note: Capital T/F for booleans
 items = ["apple", "banana"]  # Lists
 config = {"key": "value"}  # Dictionaries
 ```
@@ -56,7 +63,7 @@ config = {"key": "value"}  # Dictionaries
 **Key Differences:**
 
 - No `$` prefix for variables
-- Snake_case naming convention (not camelCase)
+- snake_case naming convention (not camelCase)
 - Indentation matters (no braces)
 - `True`/`False` are capitalized
 
@@ -114,10 +121,12 @@ items: List[str] = ["apple", "banana"]
 config: Dict[str, str] = {"key": "value"}
 
 # Optional (can be None)
-email: Optional[str] = None  # Same as: str | None
+email: Optional[str] = None  # Legacy syntax
+email: str | None = None  # Preferred in Python 3.10+
 
 # Union types
-identifier: Union[int, str] = "user_123"  # Can be int OR str
+identifier: Union[int, str] = "user_123"  # Legacy syntax
+identifier: int | str = "user_123"  # Preferred in Python 3.10+
 
 # Any type (avoid when possible)
 data: Any = {"anything": "goes"}
@@ -427,13 +436,88 @@ evens = [n for n in numbers if n % 2 == 0]  # [2, 4]
 squared_evens = [n**2 for n in numbers if n % 2 == 0]  # [4, 16]
 
 # Dictionary comprehension
+users = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25}
+]
 user_ages = {user["name"]: user["age"] for user in users}
 
 # Set comprehension
+words = ["hello", "world", "hi"]
 unique_lengths = {len(word) for word in words}
 ```
 
-### 8. Modules and Imports
+### 8. Exception Handling
+
+**PHP:**
+
+```php
+<?php
+try {
+    $result = risky_operation();
+    $file = file_get_contents('data.txt');
+} catch (FileNotFoundException $e) {
+    echo "File error: " . $e->getMessage();
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage();
+} finally {
+    cleanup();  // Always runs
+}
+```
+
+**Python:**
+
+```python
+# Basic try/except
+try:
+    result = risky_operation()
+    with open('data.txt') as f:
+        content = f.read()
+except FileNotFoundError as e:
+    print(f"File not found: {e}")
+except ValueError as e:
+    print(f"Value error: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+else:
+    # Runs only if no exception occurred
+    print("Success!")
+finally:
+    # Always runs, even if exception occurred
+    cleanup()
+
+# Common pattern: Convert user input
+try:
+    age = int(input("Enter age: "))
+    print(f"You are {age} years old")
+except ValueError:
+    print("Please enter a valid number!")
+
+# Raising exceptions
+def divide(a: int, b: int) -> float:
+    if b == 0:
+        raise ValueError("Cannot divide by zero!")
+    return a / b
+
+# Custom exceptions
+class InvalidUserError(Exception):
+    pass
+
+def create_user(name: str):
+    if not name:
+        raise InvalidUserError("Name cannot be empty")
+    return {"name": name}
+```
+
+**Key Differences:**
+
+- Use `except` (not `catch`)
+- Multiple exception types can be caught: `except (ValueError, TypeError):`
+- `else` clause is unique to Python (runs if no exception)
+- Use `raise` (not `throw`)
+- Exception names typically end with `Error`
+
+### 9. Modules and Imports
 
 **PHP Namespaces:**
 
@@ -473,7 +557,7 @@ from ..utils import helpers  # Parent directory
 from app.services import UserService  # Absolute import
 ```
 
-### 9. Working with Files
+### 10. Working with Files
 
 **PHP:**
 
@@ -512,13 +596,50 @@ with open('file.txt', 'r') as f:
 # Append to file
 with open('file.txt', 'a') as f:
     f.write('appended content\n')
-
-# File modes: 'r' read, 'w' write, 'a' append, 'r+' read/write
 ```
 
-**Note:** The `with` statement is a context manager (like PHP's try-finally for cleanup). It automatically closes the file.
+**File Modes:**
 
-### 10. Virtual Environments and Package Management
+- `'r'` - Read (default, file must exist)
+- `'w'` - Write (creates new file, overwrites if exists)
+- `'a'` - Append (creates if doesn't exist)
+- `'x'` - Exclusive creation (fails if file exists)
+- `'r+'` - Read and write
+- `'b'` - Binary mode (e.g., `'rb'`, `'wb'` for images, PDFs)
+- `'t'` - Text mode (default)
+
+**The `with` Statement (Context Manager):**
+
+The `with` statement is Python's context manager - similar to PHP's try-finally for resource cleanup. It automatically handles setup and teardown:
+
+```python
+# Context manager ensures file is closed automatically
+# Even if an exception occurs inside the block
+with open('file.txt', 'r') as f:
+    content = f.read()
+# File is automatically closed here
+
+# Without context manager (not recommended):
+f = open('file.txt', 'r')
+try:
+    content = f.read()
+finally:
+    f.close()  # Must manually close
+
+# Multiple context managers
+with open('input.txt', 'r') as infile, open('output.txt', 'w') as outfile:
+    for line in infile:
+        outfile.write(line.upper())
+```
+
+**Why use `with`?**
+
+- Automatically closes files even if errors occur
+- Prevents resource leaks
+- Cleaner, more readable code
+- Works with databases, locks, and other resources
+
+### 11. Virtual Environments and Package Management
 
 **PHP/Laravel:**
 
@@ -629,9 +750,20 @@ def main():
         else:
             print("Unknown command!")
 
+# This ensures code only runs when script is executed directly,
+# not when imported as a module in another file
 if __name__ == "__main__":
     main()
 ```
+
+**About `if __name__ == "__main__":`**
+
+This is Python's way of distinguishing between:
+
+- **Direct execution:** `python tasks.py` → `__name__` is `"__main__"`, so `main()` runs
+- **Import as module:** `from tasks import TaskManager` → `__name__` is `"tasks"`, so `main()` doesn't run
+
+This allows you to write reusable modules that can also be run as standalone scripts.
 
 Run it:
 
@@ -694,6 +826,158 @@ def analyze_file(filename: str) -> dict:
     pass
 
 # Should return: {"lines": 10, "words": 50, "chars": 300}
+```
+
+## ⚠️ Common Pitfalls for PHP Developers
+
+Transitioning from PHP to Python? Watch out for these common mistakes:
+
+### 1. **Indentation Matters**
+
+```python
+# WRONG - Mixing tabs and spaces causes IndentationError
+def greet():
+    print("Hello")  # 4 spaces
+	print("World")  # Tab - ERROR!
+
+# CORRECT - Use consistent indentation (4 spaces is standard)
+def greet():
+    print("Hello")
+    print("World")
+```
+
+### 2. **Mutable Default Arguments**
+
+```python
+# WRONG - Default list is shared across all calls!
+def add_item(item, items=[]):
+    items.append(item)
+    return items
+
+print(add_item(1))  # [1]
+print(add_item(2))  # [1, 2] - Wait, what?!
+
+# CORRECT - Use None as default
+def add_item(item, items=None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
+```
+
+### 3. **Integer Division**
+
+```python
+# PHP: 5 / 2 = 2 (integer division)
+# Python 3: 5 / 2 = 2.5 (float division)
+
+result = 5 / 2   # 2.5 (float)
+result = 5 // 2  # 2 (floor division)
+result = 5 % 2   # 1 (modulo, same as PHP)
+```
+
+### 4. **Strings are Immutable**
+
+```python
+# PHP: $str[0] = 'X'; works fine
+# Python: strings cannot be modified
+
+text = "hello"
+# text[0] = 'H'  # ERROR: 'str' object does not support item assignment
+
+# CORRECT - Create new string
+text = 'H' + text[1:]  # "Hello"
+text = text.replace('h', 'H')  # "Hello"
+```
+
+### 5. **Dictionary Keys Must Be Immutable**
+
+```python
+# Valid keys: strings, numbers, tuples
+valid = {
+    "name": "John",
+    42: "answer",
+    (1, 2): "tuple key"
+}
+
+# Invalid keys: lists, dicts, sets (they can change)
+# invalid = {[1, 2]: "value"}  # ERROR: unhashable type: 'list'
+```
+
+### 6. **Variables Scope in Loops**
+
+```python
+# PHP: $i is scoped to function, not loop
+# Python: i persists after loop ends
+
+for i in range(5):
+    pass
+
+print(i)  # 4 - i is still accessible!
+
+# To avoid this, use list comprehension or generator
+result = [x * 2 for x in range(5)]  # x is scoped to comprehension
+```
+
+### 7. **None vs False vs Empty**
+
+```python
+# These are all "falsy" but different
+value = None   # Absence of value
+value = False  # Boolean false
+value = []     # Empty list
+value = ""     # Empty string
+value = 0      # Zero
+
+# Check specifically for None
+if value is None:  # Use 'is', not ==
+    print("No value")
+
+# Check for empty collections
+if not items:  # Pythonic way
+    print("No items")
+```
+
+### 8. **Import Behavior**
+
+```python
+# PHP: include/require runs code once
+# Python: import runs module code once per interpreter session
+
+# If you modify imported code, you need to restart Python
+# or use importlib.reload() during development
+```
+
+### 9. **Comparison Operators**
+
+```python
+# PHP: == is loose, === is strict
+# Python: == compares values, 'is' compares identity
+
+a = [1, 2, 3]
+b = [1, 2, 3]
+c = a
+
+print(a == b)  # True (same values)
+print(a is b)  # False (different objects)
+print(a is c)  # True (same object)
+
+# Always use 'is' for None, True, False
+if value is None:  # Correct
+if value == None:  # Works but not Pythonic
+```
+
+### 10. **Global Variables**
+
+```python
+count = 0
+
+def increment():
+    global count  # Must declare global to modify
+    count += 1
+
+# Without 'global', Python creates local variable
+# and throws UnboundLocalError
 ```
 
 ## 🎓 Advanced Topics (Reference)

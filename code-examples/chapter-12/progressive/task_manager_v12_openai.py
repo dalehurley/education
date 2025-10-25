@@ -66,7 +66,7 @@ async def suggest_tasks(
     """
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",  # or gpt-4o
+        model="gpt-5",  # GPT-5 for coding and agentic tasks
         messages=[
             {"role": "system", "content": "You are a productivity assistant that helps break down projects into actionable tasks."},
             {"role": "user", "content": prompt}
@@ -107,7 +107,7 @@ async def enhance_task_description(
     """
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7
     )
@@ -141,7 +141,7 @@ async def auto_categorize_task(
     """
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
     )
@@ -180,7 +180,7 @@ async def smart_search(
     """
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
     )
@@ -224,7 +224,7 @@ async def break_down_task(
     """
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"}
     )

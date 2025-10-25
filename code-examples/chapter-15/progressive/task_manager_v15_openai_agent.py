@@ -202,11 +202,11 @@ Be friendly and helpful. When users ask you to do something with tasks, use the 
     # Prepare messages
     messages = [system_message] + agent_sessions[session_id]
     
-    # CONCEPT: Agent Loop
+    # CONCEPT: Agent Loop with GPT-5
     max_iterations = 5
     for iteration in range(max_iterations):
         response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5",  # GPT-5 for agentic tasks and reasoning
             messages=messages,
             tools=get_task_tools(),
             tool_choice="auto"

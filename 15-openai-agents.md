@@ -38,6 +38,8 @@ By the end of this chapter, you will:
 
 ## 📚 Core Concepts
 
+> **📌 Model Note**: This chapter uses GPT-5, OpenAI's latest model as of 2025. If using an older model like GPT-4 Turbo, adjust the model parameter and token limits accordingly. Check the [OpenAI Models documentation](https://platform.openai.com/docs/models) for the latest available models and their capabilities.
+
 ### 1. OpenAI Assistants API Setup
 
 ```bash
@@ -59,7 +61,7 @@ class AgentService:
         self,
         name: str,
         instructions: str,
-        model: str = "gpt-4-turbo-preview",
+        model: str = "gpt-5",
         tools: List[Dict] = None
     ):
         """Create a new assistant (agent)"""
@@ -147,7 +149,7 @@ class AgentService:
 ```python
 # app/agents/customer_support.py
 from app.services.agent_service import AgentService
-from typing import Dict, List
+from typing import Dict, List, Optional
 import json
 
 class CustomerSupportAgent:
@@ -230,7 +232,7 @@ class CustomerSupportAgent:
             name="Customer Support Agent",
             instructions=instructions,
             tools=self.tools,
-            model="gpt-4-turbo-preview"
+            model="gpt-5"
         )
 
         return assistant
@@ -372,6 +374,9 @@ async def customer_support(request: QueryRequest):
 
 ````python
 # app/agents/code_review.py
+from app.services.agent_service import AgentService
+from typing import Dict, Optional
+
 class CodeReviewAgent:
     def __init__(self):
         self.service = AgentService()
@@ -432,7 +437,7 @@ class CodeReviewAgent:
             name="Code Review Agent",
             instructions=instructions,
             tools=self.tools,
-            model="gpt-4-turbo-preview"
+            model="gpt-5"
         )
 
         return assistant
@@ -469,6 +474,11 @@ class CodeReviewAgent:
         run = await self.service.run_assistant(thread_id)
         run = await self.service.wait_for_completion(thread_id, run.id)
 
+        # Handle tool calls if needed
+        if run.status == "requires_action":
+            # In production, implement tool execution similar to CustomerSupportAgent
+            pass
+
         # Get review
         messages = await self.service.get_messages(thread_id)
         review = messages[0].content[0].text.value
@@ -483,16 +493,23 @@ class CodeReviewAgent:
 ### 4. Agent with Streaming
 
 ```python
+from app.services.agent_service import AgentService
+from typing import AsyncGenerator
+
 class StreamingAgent:
     """Agent that streams responses in real-time"""
+
+    def __init__(self):
+        self.service = AgentService()
+        self.assistant_id = None
 
     async def run_with_streaming(
         self,
         thread_id: str,
         assistant_id: str
-    ):
+    ) -> AsyncGenerator[str, None]:
         """Run agent with streaming responses"""
-        async with self.client.beta.threads.runs.stream(
+        async with self.service.client.beta.threads.runs.stream(
             thread_id=thread_id,
             assistant_id=assistant_id
         ) as stream:
@@ -527,14 +544,21 @@ async def streaming_agent(request: QueryRequest):
 
 ```python
 # app/agents/orchestrator.py
+from openai import AsyncOpenAI
+from app.agents.customer_support import CustomerSupportAgent
+from typing import Dict
+from app.core.config import settings
+
 class AgentOrchestrator:
     """Coordinate multiple specialized agents"""
 
     def __init__(self):
+        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         self.agents = {
             "support": CustomerSupportAgent(),
-            "technical": TechnicalAgent(),
-            "billing": BillingAgent()
+            # In production, implement these additional agents:
+            # "technical": TechnicalAgent(),
+            # "billing": BillingAgent()
         }
 
     async def route_query(self, query: str) -> str:
@@ -549,7 +573,7 @@ class AgentOrchestrator:
         """
 
         response = await self.client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-5",
             messages=[{"role": "user", "content": classification_prompt}]
         )
 
@@ -579,7 +603,10 @@ class AgentOrchestrator:
 # app/models/agent_session.py
 from sqlalchemy import Column, Integer, String, JSON, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import Base
+from app.services.agent_service import AgentService
+from typing import Optional
 
 class AgentSession(Base):
     __tablename__ = "agent_sessions"
@@ -640,13 +667,18 @@ class AgentSessionManager:
 
 ```python
 from tenacity import retry, stop_after_attempt, wait_exponential
+import openai
+import logging
+from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 class RobustAgent:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10)
     )
-    async def handle_query_with_retry(self, query: str):
+    async def handle_query_with_retry(self, query: str) -> Dict[str, Any]:
         """Handle query with automatic retry"""
         try:
             return await self.handle_query(query)
@@ -669,16 +701,18 @@ class RobustAgent:
 ### 3. Cost Tracking
 
 ```python
+import tiktoken
+import time
+from typing import Dict, Any
+
 class CostTrackingAgent:
     async def handle_query_with_tracking(
         self,
         query: str,
         user_id: int
-    ):
+    ) -> Dict[str, Any]:
         """Track costs per user/query"""
-        import tiktoken
-
-        enc = tiktoken.encoding_for_model("gpt-4")
+        enc = tiktoken.encoding_for_model("gpt-4o")  # Use gpt-4o encoding for GPT-5
         input_tokens = len(enc.encode(query))
 
         start_time = time.time()
@@ -688,7 +722,7 @@ class CostTrackingAgent:
         # Estimate output tokens
         output_tokens = len(enc.encode(result["response"]))
 
-        # Calculate cost (GPT-4 pricing)
+        # Calculate cost (example pricing - check OpenAI pricing page for current rates)
         input_cost = (input_tokens / 1000) * 0.03
         output_cost = (output_tokens / 1000) * 0.06
         total_cost = input_cost + output_cost
@@ -703,6 +737,157 @@ class CostTrackingAgent:
         )
 
         return result
+
+    async def log_usage(
+        self,
+        user_id: int,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+        duration: float
+    ):
+        """Log usage to database or monitoring system"""
+        # Implementation depends on your logging infrastructure
+        pass
+```
+
+### 4. Token Limit Management
+
+```python
+import tiktoken
+from typing import List, Dict
+
+class TokenAwareAgent:
+    """Agent that manages token limits intelligently"""
+
+    def __init__(self):
+        self.service = AgentService()
+        self.model = "gpt-5"
+        self.max_tokens = 200000  # GPT-5 context window (check docs for exact limit)
+        self.max_response_tokens = 16000
+
+    def count_tokens(self, text: str) -> int:
+        """Count tokens in text"""
+        enc = tiktoken.encoding_for_model("gpt-4o")  # Use gpt-4o encoding for GPT-5
+        return len(enc.encode(text))
+
+    async def get_messages_within_limit(
+        self,
+        thread_id: str,
+        token_budget: int = 120000
+    ) -> List[Dict]:
+        """Get messages that fit within token budget"""
+        messages = await self.service.get_messages(thread_id)
+
+        # Start from most recent and work backwards
+        selected_messages = []
+        total_tokens = 0
+
+        for message in messages:
+            message_text = message.content[0].text.value
+            tokens = self.count_tokens(message_text)
+
+            if total_tokens + tokens > token_budget:
+                break
+
+            selected_messages.insert(0, message)
+            total_tokens += tokens
+
+        return selected_messages
+
+    async def handle_query_with_context_management(
+        self,
+        query: str,
+        thread_id: str
+    ) -> Dict:
+        """Handle query with automatic context management"""
+        # Check if context is getting too large
+        messages = await self.service.get_messages(thread_id)
+        total_tokens = sum(
+            self.count_tokens(m.content[0].text.value)
+            for m in messages
+        )
+
+        # If approaching limit, create a summary thread
+        if total_tokens > 100000:  # 100k tokens
+            await self.compress_thread_history(thread_id)
+
+        # Continue with query
+        await self.service.add_message(thread_id, query)
+        run = await self.service.run_assistant(thread_id)
+        return await self.service.wait_for_completion(thread_id, run.id)
+
+    async def compress_thread_history(self, thread_id: str):
+        """Compress old messages using summarization"""
+        messages = await self.service.get_messages(thread_id)
+
+        # Take older messages (keep recent 10)
+        old_messages = messages[10:]
+
+        if old_messages:
+            # Create summary
+            summary_prompt = "Summarize the key points from this conversation:\n\n"
+            for msg in old_messages:
+                summary_prompt += f"{msg.role}: {msg.content[0].text.value}\n\n"
+
+            # Get summary (implementation depends on your approach)
+            # Could use a separate API call or store in thread metadata
+            pass
+```
+
+### 5. Rate Limiting & Quotas
+
+```python
+from datetime import datetime, timedelta
+import asyncio
+from collections import deque
+
+class RateLimitedAgent:
+    """Agent with built-in rate limiting"""
+
+    def __init__(self):
+        self.service = AgentService()
+        # Track requests per minute
+        self.request_times: deque = deque(maxlen=100)
+        self.max_requests_per_minute = 60
+        self.max_tokens_per_minute = 150000
+        self.tokens_used = deque(maxlen=100)
+
+    async def wait_if_rate_limited(self):
+        """Wait if we're hitting rate limits"""
+        now = datetime.now()
+
+        # Remove old entries (older than 1 minute)
+        while self.request_times and \
+              (now - self.request_times[0]) > timedelta(minutes=1):
+            self.request_times.popleft()
+
+        # Check if at limit
+        if len(self.request_times) >= self.max_requests_per_minute:
+            # Calculate wait time
+            oldest_request = self.request_times[0]
+            wait_seconds = 60 - (now - oldest_request).total_seconds()
+
+            if wait_seconds > 0:
+                await asyncio.sleep(wait_seconds)
+
+    async def handle_query_with_rate_limit(
+        self,
+        query: str,
+        thread_id: str
+    ) -> Dict:
+        """Handle query with rate limit management"""
+        # Wait if necessary
+        await self.wait_if_rate_limited()
+
+        # Track this request
+        self.request_times.append(datetime.now())
+
+        # Process query
+        result = await self.service.add_message(thread_id, query)
+        run = await self.service.run_assistant(thread_id)
+
+        return await self.service.wait_for_completion(thread_id, run.id)
 ```
 
 ## 📝 Exercises
@@ -739,10 +924,12 @@ Build a system with:
 ### ReAct Pattern
 
 ```python
+from typing import Dict, Any
+
 class ReactAgent:
     """Reasoning + Acting agent pattern"""
 
-    async def solve_with_react(self, problem: str):
+    async def solve_with_react(self, problem: str) -> str:
         """
         ReAct loop:
         Thought -> Action -> Observation -> Repeat
@@ -764,11 +951,34 @@ class ReactAgent:
                 return observation
 
         return "Could not solve within iteration limit"
+
+    async def generate_thought(self, problem: str) -> str:
+        """Generate reasoning about the problem"""
+        # Implementation with LLM
+        pass
+
+    async def decide_action(self, thought: str) -> Dict[str, Any]:
+        """Decide which action to take"""
+        # Implementation with LLM
+        pass
+
+    async def execute_action(self, action: Dict[str, Any]) -> str:
+        """Execute the action and return observation"""
+        # Implementation depends on available tools
+        pass
+
+    def is_solved(self, observation: str) -> bool:
+        """Check if problem is solved"""
+        # Implementation depends on success criteria
+        return False
 ```
 
 ### Agent Evaluation
 
 ```python
+import time
+from typing import Any, List, Dict
+
 class AgentEvaluator:
     """Evaluate agent performance"""
 
@@ -776,7 +986,7 @@ class AgentEvaluator:
         self,
         agent: Any,
         test_cases: List[Dict]
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """Run evaluation suite"""
         results = {
             "total": len(test_cases),
@@ -805,6 +1015,12 @@ class AgentEvaluator:
         results["avg_latency"] = sum(latencies) / len(latencies)
 
         return results
+
+    def check_response(self, response: Dict[str, Any], expected: Any) -> bool:
+        """Check if response matches expected output"""
+        # Implementation depends on your evaluation criteria
+        # Could use exact match, semantic similarity, or custom logic
+        return True
 ```
 
 ## 💻 Code Examples

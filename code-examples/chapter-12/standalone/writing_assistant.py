@@ -48,7 +48,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     """Request for chat completion."""
     messages: List[ChatMessage]
-    model: str = Field(default="gpt-4o", description="Model to use")
+    model: str = Field(default="gpt-5", description="GPT-5 model to use (gpt-5, gpt-5-mini, gpt-5-nano, gpt-5-pro)")
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_tokens: Optional[int] = Field(default=500, le=4000)
     stream: bool = Field(default=False, description="Enable streaming")
@@ -78,17 +78,18 @@ class FunctionCallRequest(BaseModel):
 
 async def call_openai_chat(
     messages: List[Dict],
-    model: str = "gpt-4o",
+    model: str = "gpt-5",
     temperature: float = 0.7,
     max_tokens: int = 500
 ) -> str:
     """
-    Call OpenAI Chat API.
+    Call OpenAI Chat API with GPT-5.
     
     CONCEPT: OpenAI Chat Completions
-    - Uses chat.completions.create()
+    - Uses chat.completions.create() with GPT-5
     - Handles conversation history
     - Like having a conversation with AI
+    - GPT-5 offers improved reasoning and context understanding
     """
     try:
         response = await asyncio.to_thread(
@@ -110,16 +111,17 @@ async def call_openai_chat(
 
 async def stream_openai_chat(
     messages: List[Dict],
-    model: str = "gpt-4o",
+    model: str = "gpt-5",
     temperature: float = 0.7
 ):
     """
-    Stream OpenAI Chat responses.
+    Stream OpenAI Chat responses with GPT-5.
     
     CONCEPT: Streaming Responses
     - Returns chunks as they're generated
     - Better UX for long responses
     - Like ChatGPT's typing effect
+    - GPT-5 provides faster streaming
     """
     try:
         stream = await asyncio.to_thread(
@@ -412,20 +414,31 @@ async def list_models():
     List available OpenAI models.
     
     CONCEPT: Model Selection
+    - GPT-5 family offers best performance
     - Different models for different use cases
     - Cost vs quality tradeoffs
     """
     return {
         "chat_models": [
             {
-                "id": "gpt-4o",
-                "description": "Most capable model, best for complex tasks",
-                "context": "128K tokens"
+                "id": "gpt-5",
+                "description": "Best for coding and agentic tasks (recommended)",
+                "context": "1M+ tokens"
             },
             {
-                "id": "gpt-4o-mini",
-                "description": "Faster and cheaper, good for simple tasks",
-                "context": "128K tokens"
+                "id": "gpt-5-pro",
+                "description": "Smarter and more precise responses",
+                "context": "1M+ tokens"
+            },
+            {
+                "id": "gpt-5-mini",
+                "description": "Faster, cost-efficient for well-defined tasks",
+                "context": "200K+ tokens"
+            },
+            {
+                "id": "gpt-5-nano",
+                "description": "Fastest, most cost-efficient",
+                "context": "Optimized"
             }
         ],
         "image_models": [

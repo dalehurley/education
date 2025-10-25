@@ -12,10 +12,16 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 # CONCEPT: Chat Completion
-def generate_text(prompt: str, model: str = "gpt-4o-mini") -> str:
+def generate_text(prompt: str, model: str = "gpt-5") -> str:
     """
-    Basic text generation.
+    Basic text generation with GPT-5.
     Most common OpenAI use case.
+    
+    Models:
+    - gpt-5: Best for coding and agentic tasks (recommended)
+    - gpt-5-mini: Faster and cost-efficient for well-defined tasks
+    - gpt-5-nano: Fastest, most cost-efficient
+    - gpt-5-pro: Smarter and more precise responses
     """
     response = client.chat.completions.create(
         model=model,
@@ -32,11 +38,11 @@ def generate_text(prompt: str, model: str = "gpt-4o-mini") -> str:
 # CONCEPT: Streaming Response
 def generate_text_stream(prompt: str) -> Generator[str, None, None]:
     """
-    Stream responses for better UX.
-    Like typing effect.
+    Stream responses for better UX with GPT-5.
+    Like typing effect in ChatGPT.
     """
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",
         messages=[{"role": "user", "content": prompt}],
         stream=True
     )
@@ -49,7 +55,8 @@ def generate_text_stream(prompt: str) -> Generator[str, None, None]:
 # CONCEPT: Function Calling
 def ai_with_tools(query: str) -> dict:
     """
-    Use function calling for structured outputs.
+    Use GPT-5 function calling for structured outputs.
+    GPT-5 has excellent function calling reliability.
     """
     tools = [
         {
@@ -70,7 +77,7 @@ def ai_with_tools(query: str) -> dict:
     ]
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",  # GPT-5 has best function calling
         messages=[{"role": "user", "content": query}],
         tools=tools,
         tool_choice="auto"

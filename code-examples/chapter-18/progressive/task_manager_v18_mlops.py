@@ -38,19 +38,31 @@ app = FastAPI(
 openai_client = OpenAI()
 claude_client = Anthropic()
 
-# CONCEPT: Model Registry
+# CONCEPT: Model Registry with GPT-5
 MODEL_REGISTRY = {
-    "gpt-4o-mini": {
+    "gpt-5": {
         "provider": "openai",
-        "cost_per_1k_tokens": 0.00015,
-        "avg_latency_ms": 800,
-        "version": "2024-07-18"
+        "cost_per_1k_tokens": 0.0150,
+        "avg_latency_ms": 1000,
+        "version": "2025-01-01"
     },
-    "gpt-4o": {
+    "gpt-5-mini": {
         "provider": "openai",
-        "cost_per_1k_tokens": 0.0050,
+        "cost_per_1k_tokens": 0.00010,
+        "avg_latency_ms": 600,
+        "version": "2025-01-01"
+    },
+    "gpt-5-nano": {
+        "provider": "openai",
+        "cost_per_1k_tokens": 0.00005,
+        "avg_latency_ms": 400,
+        "version": "2025-01-01"
+    },
+    "gpt-5-pro": {
+        "provider": "openai",
+        "cost_per_1k_tokens": 0.0200,
         "avg_latency_ms": 1200,
-        "version": "2024-08-06"
+        "version": "2025-01-01"
     },
     "claude-sonnet-4": {
         "provider": "anthropic",
@@ -80,12 +92,12 @@ class ModelMetrics(BaseModel):
 
 def get_ab_test_model() -> str:
     """
-    CONCEPT: A/B Testing
+    CONCEPT: A/B Testing with GPT-5
     - Randomly assign model variant
     - Track performance by variant
     """
     variants = {
-        "gpt-4o-mini": 0.7,  # 70% traffic
+        "gpt-5": 0.7,  # 70% traffic - GPT-5
         "claude-sonnet-4": 0.3  # 30% traffic
     }
     
@@ -96,7 +108,7 @@ def get_ab_test_model() -> str:
         if rand <= cumulative:
             return model
     
-    return "gpt-4o-mini"
+    return "gpt-5"  # Default to GPT-5
 
 def log_metrics(metrics: ModelMetrics):
     """
@@ -115,7 +127,7 @@ def fallback_chain(text: str, primary_model: str) -> dict:
     - Fall back to cheaper model on error
     - Ensure reliability
     """
-    models_to_try = [primary_model, "gpt-4o-mini"]
+    models_to_try = [primary_model, "gpt-5-mini"]  # Fallback to GPT-5 mini
     
     for model in models_to_try:
         try:
@@ -301,9 +313,9 @@ async def suggest_optimization(
     # Calculate potential savings with cheaper model
     potential_savings = 0
     for req in ml_metrics["requests"]:
-        if req["model"] != "gpt-4o-mini":
+        if req["model"] not in ["gpt-5-mini", "gpt-5-nano"]:
             current_cost = req["cost"]
-            cheaper_cost = (req["tokens_used"] / 1000) * MODEL_REGISTRY["gpt-4o-mini"]["cost_per_1k_tokens"]
+            cheaper_cost = (req["tokens_used"] / 1000) * MODEL_REGISTRY["gpt-5-mini"]["cost_per_1k_tokens"]
             potential_savings += (current_cost - cheaper_cost)
     
     recommendations = []
@@ -311,7 +323,7 @@ async def suggest_optimization(
     if potential_savings > total_cost * 0.2:  # >20% savings possible
         recommendations.append({
             "type": "switch_model",
-            "suggestion": "Switch to gpt-4o-mini for most requests",
+            "suggestion": "Switch to gpt-5-mini for cost-sensitive requests",
             "estimated_savings_usd": potential_savings,
             "savings_percentage": (potential_savings / total_cost * 100)
         })

@@ -16,7 +16,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 
 app = FastAPI(title="Multi-tenant SaaS - Chapter 11")
@@ -64,7 +64,7 @@ users_db = {
 def create_token(data: dict, expires_delta: timedelta):
     """Create JWT token."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + expires_delta
+    expire = datetime.now(timezone.utc) + expires_delta
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 

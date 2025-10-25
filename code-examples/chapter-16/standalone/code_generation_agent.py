@@ -43,7 +43,7 @@ Requirements:
 4. Explain your approach"""
     
     response = anthropic_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",  # Latest Sonnet 4.5
         max_tokens=4000,
         thinking={"type": "enabled", "budget_tokens": 2000},
         messages=[{"role": "user", "content": prompt}]
@@ -69,7 +69,7 @@ Requirements:
 async def validate_code(code: str, language: str = "python"):
     """Validate code using Claude."""
     response = anthropic_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",  # Latest Sonnet 4.5
         max_tokens=2000,
         messages=[{
             "role": "user",

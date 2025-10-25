@@ -244,7 +244,7 @@ Be proactive in suggesting improvements and identifying patterns."""
         } if request.use_thinking else None
         
         response = claude.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",  # Latest Sonnet 4.5
             max_tokens=2000,
             system=system_prompt,
             messages=messages,

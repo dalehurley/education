@@ -7,9 +7,9 @@ Compare to Laravel's Sanctum/Passport.
 
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 from passlib.context import CryptContext
 
@@ -36,6 +36,17 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
 
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+    
+    @field_validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return v
+
 
 # CONCEPT: Password Hashing
 def hash_password(password: str) -> str:
@@ -61,7 +72,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     Like Laravel's Sanctum token creation.
     """
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
     to_encode.update({"exp": expire, "type": "access"})
     
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -70,7 +81,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def create_refresh_token(data: dict) -> str:
     """Create longer-lived refresh token."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh"})
     
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

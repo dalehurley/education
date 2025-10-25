@@ -18,9 +18,9 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 from passlib.context import CryptContext
 import secrets
@@ -50,7 +50,7 @@ class Workspace(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     slug = Column(String, unique=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     members = relationship("WorkspaceMember", back_populates="workspace")
     tasks = relationship("Task", back_populates="workspace")
@@ -62,7 +62,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     workspaces = relationship("WorkspaceMember", back_populates="user")
 
@@ -78,7 +78,7 @@ class WorkspaceMember(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     workspace_id = Column(Integer, ForeignKey("workspaces.id"))
     role = Column(String, default="member")  # owner, admin, member
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     user = relationship("User", back_populates="workspaces")
     workspace = relationship("Workspace", back_populates="members")
@@ -92,7 +92,7 @@ class Task(Base):
     priority = Column(String, default="medium")
     workspace_id = Column(Integer, ForeignKey("workspaces.id"))
     created_by_id = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     workspace = relationship("Workspace", back_populates="tasks")
 
@@ -128,6 +128,12 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
+    
+    @field_validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return v
 
 class WorkspaceCreate(BaseModel):
     name: str
@@ -163,7 +169,7 @@ def get_password_hash(password):
 def create_access_token(data: dict):
     """Create JWT access token."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -175,7 +181,7 @@ def create_refresh_token(user_id: int, db: Session):
     - Can be revoked
     """
     token = secrets.token_urlsafe(32)
-    expires = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expires = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     
     refresh_token = RefreshToken(
         token=token,
@@ -281,7 +287,7 @@ async def refresh_access_token(refresh_token: str, db: Session = Depends(get_db)
         RefreshToken.revoked == False
     ).first()
     
-    if not token_record or token_record.expires_at < datetime.utcnow():
+    if not token_record or token_record.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     
     access_token = create_access_token({"user_id": token_record.user_id})

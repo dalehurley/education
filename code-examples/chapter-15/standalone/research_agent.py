@@ -29,7 +29,7 @@ async def create_assistant():
     assistant = openai.beta.assistants.create(
         name="Research Assistant",
         instructions="You are a research assistant that helps analyze topics and provide insights.",
-        model="gpt-4o",
+        model="gpt-5",  # GPT-5 for agent tasks
         tools=[{"type": "code_interpreter"}]
     )
 

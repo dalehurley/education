@@ -57,11 +57,11 @@ class Settings(BaseSettings):
     
     # AI API Keys (Chapters 12-19)
     OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-5"  # GPT-5 (best for coding and agentic tasks)
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     
     ANTHROPIC_API_KEY: Optional[str] = None
-    CLAUDE_MODEL: str = "claude-sonnet-4-20250514"
+    CLAUDE_MODEL: str = "claude-sonnet-4-5"  # Latest Claude Sonnet 4.5
     
     GOOGLE_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-2.0-flash-exp"
@@ -93,8 +93,8 @@ class Settings(BaseSettings):
     # MLOps (Chapter 18)
     ENABLE_AB_TESTING: bool = True
     AB_TEST_SPLIT: float = 0.7
-    MODEL_A: str = "gpt-4o-mini"
-    MODEL_B: str = "claude-sonnet-4-20250514"
+    MODEL_A: str = "gpt-5"  # GPT-5
+    MODEL_B: str = "claude-sonnet-4-5"  # Claude Sonnet 4.5
     
     # Background Tasks (Chapter 09)
     ENABLE_TASK_REMINDERS: bool = True

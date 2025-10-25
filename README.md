@@ -88,15 +88,27 @@ Implement background processing and caching strategies.
   - Cache invalidation
   - Advanced patterns
 
-### Part 5: Authentication (Chapter 11)
+### Part 5: Authentication (Chapters 11-11.5)
 
 Secure your API with modern authentication.
 
 - **[Chapter 11: Authentication & Authorization](11-authentication.md)**
-  - JWT tokens
-  - OAuth2 flows
-  - Role-based access control
-  - Third-party authentication
+
+  - JWT tokens and session management
+  - OAuth2 password flows
+  - Role-based access control (RBAC)
+  - Password reset and logout
+  - Rate limiting and security best practices
+  - Testing authentication
+
+- **[Chapter 11.5: Advanced Authentication & Security](11.5-advanced-authentication.md)** ⭐
+  - Two-Factor Authentication (2FA/TOTP)
+  - OAuth2 social login (Google, GitHub)
+  - Session and device management
+  - API key authentication
+  - Audit logging and security monitoring
+  - Passwordless authentication (magic links)
+  - Account lockout and advanced security patterns
 
 ### Part 6: AI Integrations (Chapters 12-18)
 
@@ -245,7 +257,9 @@ Keep track of your progress:
 - [ ] Part 2: FastAPI Core (Chapters 3-5)
 - [ ] Part 3: Database & Storage (Chapters 6-8)
 - [ ] Part 4: Jobs & Caching (Chapters 9-10)
-- [ ] Part 5: Authentication (Chapter 11)
+- [ ] Part 5: Authentication (Chapters 11-11.5)
+  - [ ] Basic Auth (11) - JWT, OAuth2, RBAC
+  - [ ] Advanced Auth (11.5) ⭐ - 2FA, Social Login, API Keys
 - [ ] Part 6: AI Integrations (Chapters 12-19)
   - [ ] AI Foundations (12-14) - OpenAI GPT-5, Claude, Gemini, Embeddings
   - [ ] AI Agents (15-16) ⭐ - GPT-5 & Claude Agents

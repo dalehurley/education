@@ -5,22 +5,27 @@
 By the end of this chapter, you will:
 
 - Set up Alembic for database migrations
-- Create and run migrations
-- Handle migration rollbacks
+- Create and run migrations safely
+- Handle migration rollbacks and reversibility
 - Seed your database with test data
-- Manage database versions
+- Manage database versions across environments
+- Follow migration best practices for production
+- Troubleshoot common migration issues
 
 ## 🔄 Laravel vs Alembic
 
-| Feature          | Laravel                        | Alembic                    |
-| ---------------- | ------------------------------ | -------------------------- |
-| Tool             | Built-in migrations            | Alembic (separate package) |
-| Create migration | `php artisan make:migration`   | `alembic revision`         |
-| Run migrations   | `php artisan migrate`          | `alembic upgrade head`     |
-| Rollback         | `php artisan migrate:rollback` | `alembic downgrade -1`     |
-| Status           | `php artisan migrate:status`   | `alembic current`          |
-| Seed             | `php artisan db:seed`          | Custom scripts             |
-| Fresh            | `php artisan migrate:fresh`    | Drop + upgrade             |
+| Feature          | Laravel                        | Alembic                           |
+| ---------------- | ------------------------------ | --------------------------------- |
+| Tool             | Built-in migrations            | Alembic (separate package)        |
+| Create migration | `php artisan make:migration`   | `alembic revision --autogenerate` |
+| Run migrations   | `php artisan migrate`          | `alembic upgrade head`            |
+| Rollback         | `php artisan migrate:rollback` | `alembic downgrade -1`            |
+| Status           | `php artisan migrate:status`   | `alembic current`                 |
+| History          | `php artisan migrate:status`   | `alembic history`                 |
+| Seed             | `php artisan db:seed`          | Custom scripts                    |
+| Fresh            | `php artisan migrate:fresh`    | Drop + upgrade                    |
+| Show pending     | N/A                            | `alembic heads`                   |
+| Stamp version    | N/A                            | `alembic stamp head`              |
 
 ## 📚 Core Concepts
 
@@ -122,6 +127,37 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+```
+
+**Note for SQLAlchemy 2.0+:**
+
+If using SQLAlchemy 2.0 with async, modify `run_migrations_online()`:
+
+```python
+async def run_async_migrations():
+    """Run migrations in async mode (SQLAlchemy 2.0+)"""
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    connectable = create_async_engine(
+        config.get_main_option("sqlalchemy.url"),
+        poolclass=pool.NullPool,
+    )
+
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+
+    await connectable.dispose()
+
+def do_run_migrations(connection):
+    context.configure(connection=connection, target_metadata=target_metadata)
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+def run_migrations_online():
+    """Run migrations in 'online' mode."""
+    import asyncio
+    asyncio.run(run_async_migrations())
 ```
 
 ```ini
@@ -256,6 +292,17 @@ def downgrade():
     op.drop_column('users', 'role')
 ```
 
+**⚠️ Autogenerate Limitations:**
+
+Alembic's `--autogenerate` is powerful but has limitations. It **cannot** detect:
+
+- Table or column renames (sees them as drop + add)
+- Changes to constraints without explicit names
+- Enum value changes (PostgreSQL)
+- Index type changes
+
+**Always review auto-generated migrations before running them!**
+
 ### 4. Running Migrations
 
 **Laravel:**
@@ -352,6 +399,21 @@ def downgrade():
     op.drop_index('ix_users_email', table_name='users')
 ```
 
+**Add Composite Index:**
+
+```python
+def upgrade():
+    # Composite index on multiple columns
+    op.create_index('ix_posts_user_created', 'posts', ['user_id', 'created_at'])
+
+    # Unique composite index
+    op.create_index('ix_votes_unique', 'votes', ['user_id', 'post_id'], unique=True)
+
+def downgrade():
+    op.drop_index('ix_votes_unique', table_name='votes')
+    op.drop_index('ix_posts_user_created', table_name='posts')
+```
+
 **Add Foreign Key:**
 
 ```python
@@ -375,6 +437,62 @@ def upgrade():
 
 def downgrade():
     op.alter_column('users', 'full_name', new_column_name='name')
+```
+
+**Add Unique Constraint:**
+
+```python
+def upgrade():
+    op.create_unique_constraint('uq_users_email', 'users', ['email'])
+
+def downgrade():
+    op.drop_constraint('uq_users_email', 'users', type_='unique')
+```
+
+**Add Check Constraint:**
+
+```python
+def upgrade():
+    op.create_check_constraint(
+        'ck_users_age_positive',
+        'users',
+        'age > 0'
+    )
+
+def downgrade():
+    op.drop_constraint('ck_users_age_positive', 'users', type_='check')
+```
+
+**Add JSON Column:**
+
+```python
+def upgrade():
+    # PostgreSQL JSONB
+    op.add_column('users', sa.Column('metadata', sa.dialects.postgresql.JSONB, nullable=True))
+
+    # Or generic JSON for cross-database compatibility
+    op.add_column('users', sa.Column('settings', sa.JSON, nullable=True))
+
+def downgrade():
+    op.drop_column('users', 'settings')
+    op.drop_column('users', 'metadata')
+```
+
+**Add Enum Type (PostgreSQL):**
+
+```python
+def upgrade():
+    # Create enum type
+    op.execute("CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended')")
+
+    # Add column using enum
+    op.add_column('users',
+        sa.Column('status', sa.Enum('active', 'inactive', 'suspended', name='user_status'))
+    )
+
+def downgrade():
+    op.drop_column('users', 'status')
+    op.execute('DROP TYPE user_status')
 ```
 
 ### 6. Data Migrations
@@ -547,6 +665,67 @@ if __name__ == "__main__":
 python -m app.db.seed
 ```
 
+**Synchronous Alternative (without async):**
+
+```python
+# app/db/seed_sync.py
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.core.config import settings
+from app.core.database import Base
+from app.models.user import User
+from app.models.post import Post
+
+def seed_database_sync():
+    """Seed the database with initial data (synchronous)"""
+
+    # Create engine and session
+    engine = create_engine(settings.DATABASE_URL)
+    SessionLocal = sessionmaker(bind=engine)
+
+    # Create tables
+    Base.metadata.create_all(bind=engine)
+
+    # Create session
+    session = SessionLocal()
+
+    try:
+        # Check if already seeded
+        if session.query(User).first():
+            print("Database already seeded")
+            return
+
+        # Create users
+        admin = User(name="Admin", email="admin@example.com", role="admin", age=30)
+        john = User(name="John Doe", email="john@example.com", role="user", age=25)
+        jane = User(name="Jane Smith", email="jane@example.com", role="user", age=28)
+
+        session.add_all([admin, john, jane])
+        session.commit()
+
+        # Create posts
+        posts = [
+            Post(title="First Post", content="Content here", published=True, user_id=admin.id),
+            Post(title="Second Post", content="More content", published=True, user_id=john.id),
+            Post(title="Draft", content="Draft content", published=False, user_id=john.id),
+        ]
+
+        session.add_all(posts)
+        session.commit()
+
+        print("Database seeded successfully!")
+
+    except Exception as e:
+        session.rollback()
+        print(f"Error seeding database: {e}")
+        raise
+    finally:
+        session.close()
+
+if __name__ == "__main__":
+    seed_database_sync()
+```
+
 ### 8. Factory Pattern for Test Data
 
 ```python
@@ -678,6 +857,387 @@ def downgrade():
 alembic upgrade head
 ```
 
+### 10. Migration Helper CLI
+
+Create a helper script for common migration tasks:
+
+```python
+# scripts/migrate.py
+"""
+Migration helper script for common Alembic operations.
+
+Usage:
+    python scripts/migrate.py create "add user status field"
+    python scripts/migrate.py up
+    python scripts/migrate.py down
+    python scripts/migrate.py status
+    python scripts/migrate.py fresh
+"""
+
+import sys
+import subprocess
+from pathlib import Path
+
+def run_command(cmd: list[str], description: str = ""):
+    """Run a shell command and handle errors"""
+    if description:
+        print(f"🔧 {description}")
+
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        if result.stdout:
+            print(result.stdout)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error: {e.stderr}")
+        return False
+
+def create_migration(message: str):
+    """Create a new migration"""
+    run_command(
+        ["alembic", "revision", "--autogenerate", "-m", message],
+        f"Creating migration: {message}"
+    )
+
+def migrate_up():
+    """Run all pending migrations"""
+    run_command(["alembic", "upgrade", "head"], "Running migrations...")
+
+def migrate_down(steps: int = 1):
+    """Rollback migrations"""
+    run_command(
+        ["alembic", "downgrade", f"-{steps}"],
+        f"Rolling back {steps} migration(s)..."
+    )
+
+def show_status():
+    """Show current migration status"""
+    print("📊 Current Migration Status:")
+    run_command(["alembic", "current"], "")
+    print("\n📋 Migration History:")
+    run_command(["alembic", "history"], "")
+
+def migrate_fresh():
+    """Drop all tables and run migrations from scratch"""
+    response = input("⚠️  This will DROP ALL TABLES. Continue? (yes/no): ")
+    if response.lower() != 'yes':
+        print("Cancelled.")
+        return
+
+    run_command(["alembic", "downgrade", "base"], "Dropping all tables...")
+    run_command(["alembic", "upgrade", "head"], "Running all migrations...")
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        sys.exit(1)
+
+    command = sys.argv[1].lower()
+
+    if command == "create":
+        if len(sys.argv) < 3:
+            print("Error: Migration message required")
+            print('Usage: python scripts/migrate.py create "message"')
+            sys.exit(1)
+        create_migration(sys.argv[2])
+
+    elif command == "up":
+        migrate_up()
+
+    elif command == "down":
+        steps = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+        migrate_down(steps)
+
+    elif command == "status":
+        show_status()
+
+    elif command == "fresh":
+        migrate_fresh()
+
+    else:
+        print(f"Unknown command: {command}")
+        print(__doc__)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+```
+
+**Usage:**
+
+```bash
+# Create new migration
+python scripts/migrate.py create "add user status field"
+
+# Run migrations
+python scripts/migrate.py up
+
+# Rollback one migration
+python scripts/migrate.py down
+
+# Rollback multiple migrations
+python scripts/migrate.py down 3
+
+# Show status
+python scripts/migrate.py status
+
+# Fresh migration (drops all and re-runs)
+python scripts/migrate.py fresh
+```
+
+## ⚡ Best Practices
+
+### 1. Always Make Migrations Reversible
+
+Every migration should have a proper `downgrade()` function:
+
+```python
+# ❌ Bad - No way to undo
+def downgrade():
+    pass
+
+# ✅ Good - Fully reversible
+def downgrade():
+    op.drop_constraint('fk_posts_category', 'posts', type_='foreignkey')
+    op.drop_column('posts', 'category_id')
+```
+
+### 2. Test Migrations in Development First
+
+```bash
+# Test the full cycle
+alembic upgrade head    # Apply migration
+alembic downgrade -1    # Rollback
+alembic upgrade head    # Re-apply
+
+# Check the database state after each step
+```
+
+### 3. Use Transactions for Data Migrations
+
+```python
+def upgrade():
+    # Use batch operations for large datasets
+    from sqlalchemy import table, column
+    users = table('users', column('email'))
+
+    # This runs in a transaction
+    op.execute(
+        users.update()
+        .where(users.c.email == None)
+        .values(email='noemail@example.com')
+    )
+```
+
+### 4. Backup Before Production Migrations
+
+```bash
+# Always backup before running migrations in production
+pg_dump -U username dbname > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Then run migrations
+alembic upgrade head
+```
+
+### 5. Handle Large Data Sets Carefully
+
+For migrations affecting millions of rows:
+
+```python
+def upgrade():
+    # Bad - Locks entire table
+    op.execute("UPDATE users SET updated_at = NOW()")
+
+    # Good - Batch updates
+    op.execute("""
+        UPDATE users
+        SET updated_at = NOW()
+        WHERE id IN (SELECT id FROM users LIMIT 1000)
+    """)
+    # Repeat in chunks with a script
+```
+
+### 6. Name Constraints Explicitly
+
+```python
+# ✅ Good - Named constraints can be easily dropped
+op.create_foreign_key(
+    'fk_posts_user_id',  # Explicit name
+    'posts', 'users',
+    ['user_id'], ['id']
+)
+
+# ❌ Bad - Auto-generated names vary by database
+op.create_foreign_key(
+    None,  # Database generates name
+    'posts', 'users',
+    ['user_id'], ['id']
+)
+```
+
+### 7. Don't Mix Schema and Data Changes
+
+```python
+# ❌ Bad - Mixed concerns
+def upgrade():
+    op.add_column('users', sa.Column('status', sa.String(20)))
+    op.execute("UPDATE users SET status = 'active'")
+
+# ✅ Good - Separate migrations
+# Migration 1: Add column (schema)
+def upgrade():
+    op.add_column('users', sa.Column('status', sa.String(20), nullable=True))
+
+# Migration 2: Populate data
+def upgrade():
+    op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+    op.alter_column('users', 'status', nullable=False)
+```
+
+### 8. Version Control Best Practices
+
+- **Commit migrations with code changes** that require them
+- **Never edit applied migrations** - create a new one to fix issues
+- **Use descriptive migration messages**: `alembic revision -m "add user role field"`
+- **Review auto-generated migrations** before committing
+
+### 9. Environment-Specific Considerations
+
+```python
+# alembic/env.py - Handle different environments
+import os
+from app.core.config import settings
+
+config = context.config
+
+# Override from environment
+if os.getenv("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
+else:
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+```
+
+### 10. Use Batch Operations for SQLite
+
+SQLite has limited ALTER TABLE support. Use batch mode:
+
+```python
+def upgrade():
+    with op.batch_alter_table('users') as batch_op:
+        batch_op.add_column(sa.Column('role', sa.String(50)))
+        batch_op.create_index('ix_users_role', ['role'])
+```
+
+## 🔧 Troubleshooting Common Issues
+
+### Issue 1: "Can't locate revision identified by 'xyz'"
+
+**Cause:** Migration file missing or version mismatch
+
+**Solution:**
+
+```bash
+# Check current version
+alembic current
+
+# Check history
+alembic history
+
+# If database is ahead of code, stamp to match
+alembic stamp head
+```
+
+### Issue 2: "Target database is not up to date"
+
+**Cause:** Database has unapplied migrations
+
+**Solution:**
+
+```bash
+# See what's pending
+alembic heads
+
+# Apply pending migrations
+alembic upgrade head
+```
+
+### Issue 3: "Multiple heads detected"
+
+**Cause:** Multiple branches in migration history
+
+**Solution:**
+
+```bash
+# View the branches
+alembic heads
+
+# Merge the branches
+alembic merge heads -m "merge branches"
+```
+
+### Issue 4: "Table already exists"
+
+**Cause:** Migration trying to create existing table
+
+**Solution:**
+
+```python
+def upgrade():
+    # Check if table exists first
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+
+    if 'users' not in inspector.get_table_names():
+        op.create_table('users', ...)
+```
+
+### Issue 5: Foreign Key Constraint Failure
+
+**Cause:** Data violates new constraint
+
+**Solution:**
+
+```python
+def upgrade():
+    # Clean up orphaned records first
+    op.execute("""
+        DELETE FROM posts
+        WHERE user_id NOT IN (SELECT id FROM users)
+    """)
+
+    # Then add constraint
+    op.create_foreign_key('fk_posts_user', 'posts', 'users',
+                         ['user_id'], ['id'])
+```
+
+### Issue 6: "No module named 'app.models'"
+
+**Cause:** Python path not set correctly
+
+**Solution:**
+
+```ini
+# alembic.ini
+[alembic]
+prepend_sys_path = .
+
+# Or set PYTHONPATH
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+```
+
+### Issue 7: Slow Migrations on Large Tables
+
+**Solution:**
+
+```python
+def upgrade():
+    # Create index CONCURRENTLY (PostgreSQL)
+    op.execute('CREATE INDEX CONCURRENTLY ix_users_email ON users(email)')
+
+    # Or add column without locking
+    op.execute('ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT NULL')
+```
+
 ## 📝 Exercises
 
 ### Exercise 1: Create Migration for Comments
@@ -704,7 +1264,165 @@ Create a comprehensive seed script that:
 - Creates 1000 comments
 - Uses Faker for realistic data
 
+### Exercise 4: Safe Column Rename
+
+Create a migration that safely renames a column with data preservation:
+
+- Rename `users.name` to `users.full_name`
+- Ensure data is preserved
+- Include proper downgrade logic
+
+### Exercise 5: Add Enum Type
+
+Create a migration that:
+
+- Adds a PostgreSQL ENUM type for user status ('active', 'inactive', 'suspended')
+- Adds a `status` column using this enum
+- Includes proper downgrade that removes both column and enum type
+
+## 📋 Quick Reference
+
+### Common Commands Cheat Sheet
+
+```bash
+# Setup
+alembic init alembic                                    # Initialize Alembic
+alembic revision --autogenerate -m "message"            # Create migration
+
+# Running Migrations
+alembic upgrade head                                     # Run all pending
+alembic upgrade +1                                       # Run one migration
+alembic upgrade abc123                                   # Upgrade to specific revision
+
+# Rolling Back
+alembic downgrade -1                                     # Rollback one
+alembic downgrade base                                   # Rollback all
+alembic downgrade abc123                                 # Downgrade to specific revision
+
+# Information
+alembic current                                          # Show current version
+alembic history                                          # Show all migrations
+alembic history --verbose                                # Detailed history
+alembic heads                                            # Show pending migrations
+alembic show abc123                                      # Show specific migration
+
+# Maintenance
+alembic stamp head                                       # Mark database as current
+alembic merge heads -m "merge"                          # Merge branches
+```
+
+### Migration Operations Quick Reference
+
+```python
+# Tables
+op.create_table('table_name', ...)
+op.drop_table('table_name')
+op.rename_table('old_name', 'new_name')
+
+# Columns
+op.add_column('table', sa.Column('name', sa.String(50)))
+op.drop_column('table', 'column_name')
+op.alter_column('table', 'column', new_column_name='new_name')
+
+# Indexes
+op.create_index('ix_name', 'table', ['column'])
+op.drop_index('ix_name', table_name='table')
+
+# Constraints
+op.create_foreign_key('fk_name', 'source', 'target', ['col'], ['id'])
+op.drop_constraint('constraint_name', 'table', type_='foreignkey')
+op.create_unique_constraint('uq_name', 'table', ['column'])
+
+# Raw SQL
+op.execute("SQL STATEMENT")
+op.execute(sa.text("SQL WITH :param").bindparams(param='value'))
+```
+
 ## 🎓 Advanced Topics (Reference)
+
+### CI/CD Integration
+
+**GitHub Actions Example:**
+
+```yaml
+# .github/workflows/migrations.yml
+name: Database Migrations
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-migrations:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+        run: |
+          alembic upgrade head
+
+      - name: Test rollback
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+        run: |
+          alembic downgrade -1
+          alembic upgrade head
+```
+
+**Production Deployment Script:**
+
+```bash
+#!/bin/bash
+# deploy-migrations.sh
+
+set -e  # Exit on error
+
+echo "🔍 Checking migration status..."
+alembic current
+
+echo "📋 Showing pending migrations..."
+alembic history --verbose
+
+echo "⚠️  Creating backup..."
+BACKUP_FILE="backup_$(date +%Y%m%d_%H%M%S).sql"
+pg_dump $DATABASE_URL > $BACKUP_FILE
+echo "✅ Backup created: $BACKUP_FILE"
+
+echo "🚀 Running migrations..."
+alembic upgrade head
+
+echo "✅ Migrations completed successfully!"
+alembic current
+```
 
 ### Multiple Database Support
 
@@ -723,24 +1441,74 @@ def run_migrations_online():
 ### Branching Migrations
 
 ```bash
+# Create a branch from a specific revision
 alembic revision -m "branch" --head=abc123 --splice
+
+# Merge multiple heads
+alembic merge heads -m "merge feature branches"
 ```
 
 ### Migration Testing
 
 ```python
 # tests/test_migrations.py
+import pytest
+from alembic import command
+from alembic.config import Config
+
 def test_migration_upgrade_downgrade():
+    """Test that migrations can be applied and rolled back"""
     alembic_cfg = Config("alembic.ini")
 
-    # Upgrade
+    # Start from base
+    command.downgrade(alembic_cfg, "base")
+
+    # Upgrade to head
     command.upgrade(alembic_cfg, "head")
 
-    # Downgrade
+    # Downgrade one step
     command.downgrade(alembic_cfg, "-1")
 
     # Upgrade again
     command.upgrade(alembic_cfg, "head")
+
+def test_migration_is_reversible():
+    """Test each migration individually"""
+    alembic_cfg = Config("alembic.ini")
+
+    # Get all revisions
+    from alembic.script import ScriptDirectory
+    script = ScriptDirectory.from_config(alembic_cfg)
+
+    for revision in script.walk_revisions():
+        # Test upgrade
+        command.upgrade(alembic_cfg, revision.revision)
+
+        # Test downgrade
+        if revision.down_revision:
+            command.downgrade(alembic_cfg, revision.down_revision)
+```
+
+### Zero-Downtime Migrations
+
+For production systems that can't afford downtime:
+
+```python
+# Migration 1: Add column as nullable
+def upgrade():
+    op.add_column('users', sa.Column('status', sa.String(20), nullable=True))
+
+# Deploy new code that writes to both old and new schema
+
+# Migration 2: Backfill data
+def upgrade():
+    op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+
+# Migration 3: Make column non-nullable
+def upgrade():
+    op.alter_column('users', 'status', nullable=False)
+
+# Remove old code that writes to old schema
 ```
 
 ## 💻 Code Examples

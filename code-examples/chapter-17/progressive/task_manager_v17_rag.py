@@ -158,7 +158,7 @@ async def ask_documentation(
     # Combine retrieved chunks
     context = "\n\n".join(results['documents'][0])
     
-    # CONCEPT: Augmented Generation
+    # CONCEPT: Augmented Generation with GPT-5
     prompt = f"""Based on the following documentation, answer the question.
 If the answer is not in the documentation, say so.
 
@@ -169,9 +169,9 @@ Question: {request.question}
 
 Answer:"""
     
-    # Generate answer
+    # Generate answer using GPT-5
     response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",  # GPT-5 for better context understanding
         messages=[
             {"role": "system", "content": "You are a helpful documentation assistant. Answer questions based on the provided documentation."},
             {"role": "user", "content": prompt}
@@ -262,7 +262,7 @@ Original: {request.question}
 Provide 3 variations as JSON array: {{"variations": ["...", "...", "..."]}}"""
     
     response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",  # GPT-5 for better query expansion
         messages=[{"role": "user", "content": variations_prompt}],
         response_format={"type": "json_object"}
     )
@@ -303,7 +303,7 @@ Question: {request.question}
 Answer:"""
     
     response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5",  # GPT-5 for better query expansion
         messages=[{"role": "user", "content": prompt}]
     )
     

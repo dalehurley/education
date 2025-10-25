@@ -54,8 +54,10 @@ result = ai_with_tools("Create a task")
 
 ## Cost Optimization
 
-- Use `gpt-4o-mini` for most tasks (cheaper)
-- Use `gpt-4o` only when needed (smarter)
+- Use `gpt-5` for most tasks (best for coding and agentic tasks)
+- Use `gpt-5-mini` for well-defined, cost-sensitive tasks
+- Use `gpt-5-nano` for fastest, most cost-efficient processing
+- Use `gpt-5-pro` for highest quality and precision
 - Batch embeddings when possible
 - Cache responses where appropriate
 - Set max_tokens to limit costs

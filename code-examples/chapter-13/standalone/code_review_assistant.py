@@ -70,8 +70,8 @@ class ThinkingRequest(BaseModel):
 
 def call_claude(
     messages: List[Dict],
-    model: str = "claude-sonnet-4-20250514",
-    max_tokens: int = 4000,
+    model: str = "claude-sonnet-4-5",  # Latest Claude Sonnet 4.5
+    max_tokens: int = 16384,  # Sonnet 4.5 supports up to 64K
     temperature: float = 0.7,
     system: Optional[str] = None
 ) -> str:
@@ -104,7 +104,7 @@ def call_claude(
 
 def call_claude_with_thinking(
     messages: List[Dict],
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-4-5",  # Extended thinking available in Sonnet 4.5
     system: Optional[str] = None
 ) -> Dict[str, str]:
     """
@@ -198,7 +198,7 @@ async def review_code(request: CodeReviewRequest):
         "review": review,
         "language": request.language,
         "focus": request.focus,
-        "model": "claude-sonnet-4-20250514"
+        "model": "claude-sonnet-4-5"
     }
 
 
@@ -399,27 +399,39 @@ async def list_models():
     - Claude Sonnet 4.5 best for coding
     """
     return {
-        "recommended": "claude-sonnet-4-20250514",
+        "recommended": "claude-sonnet-4-5",
         "models": [
             {
-                "id": "claude-sonnet-4-20250514",
+                "id": "claude-sonnet-4-5",
                 "name": "Claude Sonnet 4.5",
-                "description": "Best for coding tasks, extended thinking",
-                "context": "200K tokens",
-                "strengths": ["Code analysis", "Reasoning", "Accuracy"]
+                "description": "Smartest model for complex agents and coding",
+                "context": "200K tokens (1M in beta)",
+                "max_output": "64K tokens",
+                "pricing": "$3/$15 per M tokens",
+                "strengths": ["Code analysis", "Reasoning", "Extended thinking", "64K output"]
             },
             {
-                "id": "claude-3-5-sonnet-20241022",
-                "name": "Claude 3.5 Sonnet",
-                "description": "Previous version, still excellent",
-                "context": "200K tokens"
+                "id": "claude-haiku-4-5",
+                "name": "Claude Haiku 4.5",
+                "description": "Fastest model with near-frontier intelligence",
+                "context": "200K tokens",
+                "max_output": "64K tokens",
+                "pricing": "$1/$5 per M tokens"
+            },
+            {
+                "id": "claude-opus-4-1",
+                "name": "Claude Opus 4.1",
+                "description": "Exceptional model for specialized reasoning",
+                "context": "200K tokens",
+                "max_output": "32K tokens",
+                "pricing": "$15/$75 per M tokens"
             }
         ],
         "comparison_with_gpt": {
-            "better_for_code": "Claude generally better for code tasks",
-            "thinking_mode": "Claude has extended thinking, GPT doesn't",
-            "context_window": "Claude 200K vs GPT 128K",
-            "cost": "Similar pricing"
+            "better_for_code": "Claude Sonnet 4.5 generally better for code tasks",
+            "thinking_mode": "All Claude 4.5 models support extended thinking",
+            "context_window": "Claude 200K (1M beta) vs GPT-5 1M+",
+            "cost": "Claude $3/$15, GPT-5 $15/$45 for best models"
         }
     }
 

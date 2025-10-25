@@ -7,11 +7,15 @@
 By the end of this chapter, you will:
 
 - Set up Google Gemini API integration
-- Use Gemini Pro, Flash, and Ultra models effectively
+- Use Gemini 1.5 Pro, Flash, and Flash-8B models effectively
 - Implement native multimodal processing (text + image + video + audio)
 - Leverage Gemini's unique grounding with Google Search
 - Use code execution for data analysis
+- Work with JSON mode and structured outputs
+- Count tokens and estimate costs
 - Create and manage embeddings
+- Implement production best practices (caching, retries, model selection)
+- Configure safety settings appropriately
 - Build production-ready Gemini integrations
 - Compare Gemini with OpenAI and Claude for different use cases
 
@@ -21,13 +25,15 @@ By the end of this chapter, you will:
 
 **Gemini Model Family:**
 
-| Model                | Best For                        | Context | Cost (per M tokens) | Speed   | Multimodal |
-| -------------------- | ------------------------------- | ------- | ------------------- | ------- | ---------- |
-| **Gemini 2.0 Ultra** | Most capable, complex reasoning | 2M      | $7 / $21 (in/out)   | Slower  | ✅ Native  |
-| **Gemini 2.0 Pro**   | Balanced performance            | 2M      | $1.25 / $5          | Fast    | ✅ Native  |
-| **Gemini 2.0 Flash** | Speed, cost-effective           | 1M      | $0.075 / $0.30      | Fastest | ✅ Native  |
+| Model                   | Best For                       | Context | Cost (per M tokens) | Speed   | Multimodal |
+| ----------------------- | ------------------------------ | ------- | ------------------- | ------- | ---------- |
+| **Gemini 1.5 Pro**      | Balanced performance, long ctx | 2M      | $1.25 / $5          | Fast    | ✅ Native  |
+| **Gemini 1.5 Flash**    | Speed, cost-effective          | 1M      | $0.075 / $0.30      | Fastest | ✅ Native  |
+| **Gemini 1.5 Flash-8B** | Ultra-fast, cheapest           | 1M      | $0.0375 / $0.15     | Fastest | ✅ Native  |
 
-**Laravel Analogy**: Like having three worker types - Ultra is your senior architect, Pro is your reliable mid-level, Flash is your quick junior for simple tasks. All can handle text, images, video, and audio natively.
+**Note**: Gemini 2.0 models are in preview and may have different pricing/features.
+
+**FastAPI Analogy**: Like having three worker types - Pro is your reliable senior dev, Flash is your quick mid-level, Flash-8B is your speedy junior for simple tasks. All can handle text, images, video, and audio natively.
 
 ## 🌟 Gemini Unique Features
 
@@ -43,7 +49,7 @@ By the end of this chapter, you will:
 ### 1. Setup and Configuration
 
 ```bash
-pip install google-generativeai google-ai-generativelanguage
+pip install google-generativeai google-ai-generativelanguage pillow
 ```
 
 ```python
@@ -57,9 +63,11 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     GOOGLE_API_KEY: str
     GOOGLE_PROJECT_ID: str | None = None
-    GEMINI_MODEL: str = "gemini-2.0-pro"
+    GEMINI_MODEL: str = "gemini-1.5-pro"  # or gemini-1.5-flash for speed
     GEMINI_TEMPERATURE: float = 1.0
     GEMINI_MAX_TOKENS: int = 8192
+    GEMINI_TOP_P: float = 0.95
+    GEMINI_TOP_K: int = 40
 
     class Config:
         env_file = ".env"
@@ -71,6 +79,9 @@ import google.generativeai as genai
 from google.generativeai.types import GenerationConfig, HarmCategory, HarmBlockThreshold
 from typing import List, Dict, Optional, AsyncIterator
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GeminiService:
     def __init__(self):
@@ -80,11 +91,13 @@ class GeminiService:
         self.generation_config = GenerationConfig(
             temperature=settings.GEMINI_TEMPERATURE,
             max_output_tokens=settings.GEMINI_MAX_TOKENS,
-            top_p=0.95,
-            top_k=40
+            top_p=settings.GEMINI_TOP_P,
+            top_k=settings.GEMINI_TOP_K
         )
 
         # Safety settings (adjust as needed)
+        # These prevent the model from generating harmful content
+        # BLOCK_MEDIUM_AND_ABOVE is recommended for production
         self.safety_settings = {
             HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
             HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
@@ -92,43 +105,94 @@ class GeminiService:
             HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
         }
 
-    def get_model(self, model_name: str = None):
-        """Get Gemini model instance"""
+    def get_model(
+        self,
+        model_name: str = None,
+        system_instruction: str = None
+    ) -> genai.GenerativeModel:
+        """
+        Get Gemini model instance
+
+        Args:
+            model_name: Model to use (gemini-1.5-pro, gemini-1.5-flash, etc.)
+            system_instruction: Optional system instruction for the model
+        """
         model_name = model_name or settings.GEMINI_MODEL
+
         return genai.GenerativeModel(
             model_name=model_name,
             generation_config=self.generation_config,
-            safety_settings=self.safety_settings
+            safety_settings=self.safety_settings,
+            system_instruction=system_instruction
+        )
+
+    def _check_response_blocked(self, response) -> bool:
+        """Check if response was blocked by safety filters"""
+        if not response.candidates:
+            return True
+
+        candidate = response.candidates[0]
+        return (
+            hasattr(candidate, 'finish_reason') and
+            candidate.finish_reason.name in ['SAFETY', 'RECITATION']
         )
 ```
 
 ### 2. Chat Completions
 
-```python
+````python
 from fastapi import HTTPException
-import logging
-
-logger = logging.getLogger(__name__)
 
 class GeminiService:
     async def chat(
         self,
         prompt: str,
-        model: str = "gemini-2.0-pro",
-        temperature: float = 1.0
+        model: str = "gemini-1.5-pro",
+        temperature: float = None,
+        system_instruction: str = None
     ) -> str:
-        """Simple chat completion"""
-        try:
-            model_instance = self.get_model(model)
+        """
+        Simple chat completion
 
-            # Generate response
+        Args:
+            prompt: User message
+            model: Model to use (gemini-1.5-pro, gemini-1.5-flash)
+            temperature: Override default temperature
+            system_instruction: Optional system instruction
+        """
+        try:
+            # Override temperature if provided
+            if temperature is not None:
+                config = GenerationConfig(
+                    temperature=temperature,
+                    max_output_tokens=self.generation_config.max_output_tokens
+                )
+                model_instance = genai.GenerativeModel(
+                    model_name=model,
+                    generation_config=config,
+                    safety_settings=self.safety_settings,
+                    system_instruction=system_instruction
+                )
+            else:
+                model_instance = self.get_model(model, system_instruction)
+
+            # Generate response (use asyncio.to_thread for sync SDK)
             response = await asyncio.to_thread(
                 model_instance.generate_content,
                 prompt
             )
 
+            # Check if blocked by safety filters
+            if self._check_response_blocked(response):
+                raise HTTPException(
+                    400,
+                    "Response blocked by safety filters. Please rephrase your request."
+            )
+
             return response.text
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Gemini chat error: {str(e)}")
             raise HTTPException(500, f"Gemini API error: {str(e)}")
@@ -136,22 +200,31 @@ class GeminiService:
     async def chat_with_history(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro",
+        system_instruction: str = None
     ) -> str:
-        """Multi-turn conversation with history"""
+        """
+        Multi-turn conversation with history
+
+        Args:
+            messages: List of messages with 'role' and 'content'
+            model: Model to use
+            system_instruction: Optional system instruction
+        """
         try:
-            model_instance = self.get_model(model)
+            model_instance = self.get_model(model, system_instruction)
 
-            # Start chat session
-            chat = model_instance.start_chat(history=[])
-
-            # Add history (all but last message)
+            # Convert messages to Gemini format
+            history = []
             for msg in messages[:-1]:
                 role = "user" if msg["role"] == "user" else "model"
-                chat.history.append({
+                history.append({
                     "role": role,
                     "parts": [msg["content"]]
                 })
+
+            # Start chat session with history
+            chat = model_instance.start_chat(history=history)
 
             # Send last message
             last_message = messages[-1]["content"]
@@ -160,47 +233,82 @@ class GeminiService:
                 last_message
             )
 
+            # Check if blocked
+            if self._check_response_blocked(response):
+                raise HTTPException(400, "Response blocked by safety filters")
+
             return response.text
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Gemini chat history error: {str(e)}")
             raise HTTPException(500, str(e))
 
 # FastAPI endpoints
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/gemini", tags=["Gemini"])
 gemini_service = GeminiService()
 
 class ChatRequest(BaseModel):
-    prompt: str
-    model: str = "gemini-2.0-pro"
-    temperature: float = 1.0
+    prompt: str = Field(..., description="User message")
+    model: str = Field(default="gemini-1.5-pro", description="Model to use")
+    temperature: float = Field(default=1.0, ge=0.0, le=2.0)
+    system_instruction: str = Field(default=None, description="Optional system instruction")
 
 class ChatHistoryRequest(BaseModel):
-    messages: List[Dict[str, str]]
-    model: str = "gemini-2.0-pro"
+    messages: List[Dict[str, str]] = Field(..., description="Message history")
+    model: str = Field(default="gemini-1.5-pro")
+    system_instruction: str = Field(default=None)
 
 @router.post("/chat")
 async def gemini_chat(request: ChatRequest):
-    """Simple Gemini chat endpoint"""
+    """
+    Simple Gemini chat endpoint
+
+    Example:
+    ```json
+    {
+      "prompt": "Explain quantum computing in simple terms",
+      "model": "gemini-1.5-flash",
+      "temperature": 0.7,
+      "system_instruction": "You are a helpful science teacher"
+    }
+    ```
+    """
     response = await gemini_service.chat(
         request.prompt,
         request.model,
-        request.temperature
+        request.temperature,
+        request.system_instruction
     )
-    return {"response": response}
+    return {"response": response, "model": request.model}
 
 @router.post("/chat/history")
 async def gemini_chat_history(request: ChatHistoryRequest):
-    """Multi-turn conversation"""
+    """
+    Multi-turn conversation with history
+
+    Example:
+    ```json
+    {
+      "messages": [
+        {"role": "user", "content": "What is Python?"},
+        {"role": "model", "content": "Python is a programming language..."},
+        {"role": "user", "content": "What are its main features?"}
+      ]
+    }
+    ```
+    """
     response = await gemini_service.chat_with_history(
         request.messages,
-        request.model
+        request.model,
+        request.system_instruction
     )
-    return {"response": response}
-```
+    return {"response": response, "model": request.model}
+````
 
 ### 3. Streaming Responses
 
@@ -209,20 +317,34 @@ class GeminiService:
     async def chat_stream(
         self,
         prompt: str,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro",
+        system_instruction: str = None
     ) -> AsyncIterator[str]:
-        """Stream responses from Gemini"""
+        """
+        Stream responses from Gemini
+
+        Note: Streaming provides lower latency for long responses
+        """
         try:
-            model_instance = self.get_model(model)
+            model_instance = self.get_model(model, system_instruction)
 
-            # Generate streaming response
-            response = await asyncio.to_thread(
-                model_instance.generate_content,
-                prompt,
-                stream=True
-            )
+            # Generate streaming response (synchronous generator)
+            def _generate():
+                return model_instance.generate_content(prompt, stream=True)
 
-            for chunk in response:
+            response_stream = await asyncio.to_thread(_generate)
+
+            # Iterate through chunks
+            for chunk in response_stream:
+                # Check safety
+                if hasattr(chunk, 'candidates') and chunk.candidates:
+                    candidate = chunk.candidates[0]
+                    if hasattr(candidate, 'finish_reason'):
+                        if candidate.finish_reason.name in ['SAFETY', 'RECITATION']:
+                            yield "[Response blocked by safety filters]"
+                            return
+
+                # Yield text if available
                 if chunk.text:
                     yield chunk.text
 
@@ -233,30 +355,41 @@ class GeminiService:
     async def chat_stream_with_history(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro",
+        system_instruction: str = None
     ) -> AsyncIterator[str]:
         """Stream multi-turn conversation"""
         try:
-            model_instance = self.get_model(model)
-            chat = model_instance.start_chat(history=[])
+            model_instance = self.get_model(model, system_instruction)
 
-            # Add history
+            # Convert messages to history
+            history = []
             for msg in messages[:-1]:
                 role = "user" if msg["role"] == "user" else "model"
-                chat.history.append({
+                history.append({
                     "role": role,
                     "parts": [msg["content"]]
                 })
 
+            chat = model_instance.start_chat(history=history)
+
             # Stream last message
             last_message = messages[-1]["content"]
-            response = await asyncio.to_thread(
-                chat.send_message,
-                last_message,
-                stream=True
-            )
 
-            for chunk in response:
+            def _send():
+                return chat.send_message(last_message, stream=True)
+
+            response_stream = await asyncio.to_thread(_send)
+
+            for chunk in response_stream:
+                # Check safety
+                if hasattr(chunk, 'candidates') and chunk.candidates:
+                    candidate = chunk.candidates[0]
+                    if hasattr(candidate, 'finish_reason'):
+                        if candidate.finish_reason.name in ['SAFETY', 'RECITATION']:
+                            yield "[Response blocked by safety filters]"
+                            return
+
                 if chunk.text:
                     yield chunk.text
 
@@ -268,22 +401,244 @@ from fastapi.responses import StreamingResponse
 
 @router.post("/chat/stream")
 async def gemini_stream(request: ChatRequest):
-    """Streaming chat endpoint"""
+    """
+    Streaming chat endpoint
+
+    Returns server-sent events with real-time response chunks
+    """
     return StreamingResponse(
-        gemini_service.chat_stream(request.prompt, request.model),
+        gemini_service.chat_stream(
+            request.prompt,
+            request.model,
+            request.system_instruction
+        ),
         media_type="text/event-stream"
     )
 
 @router.post("/chat/stream/history")
 async def gemini_stream_history(request: ChatHistoryRequest):
-    """Streaming with history"""
+    """Streaming with conversation history"""
     return StreamingResponse(
-        gemini_service.chat_stream_with_history(request.messages, request.model),
+        gemini_service.chat_stream_with_history(
+            request.messages,
+            request.model,
+            request.system_instruction
+        ),
         media_type="text/event-stream"
     )
 ```
 
-### 4. Native Multimodal Processing ⭐ UNIQUE FEATURE
+### 4. JSON Mode and Structured Outputs
+
+````python
+import json
+from typing import Type
+from pydantic import BaseModel
+
+class GeminiService:
+    async def chat_json(
+        self,
+        prompt: str,
+        response_schema: Dict = None,
+        model: str = "gemini-1.5-pro"
+    ) -> Dict:
+        """
+        Get structured JSON response from Gemini
+
+        Args:
+            prompt: User message
+            response_schema: Optional JSON schema for response
+            model: Model to use
+        """
+        try:
+            # Configure for JSON output
+            config = GenerationConfig(
+                temperature=self.generation_config.temperature,
+                max_output_tokens=self.generation_config.max_output_tokens,
+                response_mime_type="application/json"
+            )
+
+            model_instance = genai.GenerativeModel(
+                model_name=model,
+                generation_config=config,
+                safety_settings=self.safety_settings
+            )
+
+            # Add schema hint to prompt if provided
+            if response_schema:
+                schema_str = json.dumps(response_schema, indent=2)
+                prompt = f"{prompt}\n\nReturn response as JSON matching this schema:\n{schema_str}"
+
+            response = await asyncio.to_thread(
+                model_instance.generate_content,
+                prompt
+            )
+
+            # Check if blocked
+            if self._check_response_blocked(response):
+                raise HTTPException(400, "Response blocked by safety filters")
+
+            # Parse JSON response
+            return json.loads(response.text)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {str(e)}")
+            raise HTTPException(500, "Invalid JSON response from model")
+        except Exception as e:
+            logger.error(f"JSON chat error: {str(e)}")
+            raise HTTPException(500, str(e))
+
+    async def chat_with_pydantic(
+        self,
+        prompt: str,
+        response_model: Type[BaseModel],
+        model: str = "gemini-1.5-pro"
+    ) -> BaseModel:
+        """
+        Get Pydantic model response
+
+        Example:
+            class UserInfo(BaseModel):
+                name: str
+                age: int
+                email: str
+
+            result = await chat_with_pydantic(
+                "Extract: John Doe, 30, john@example.com",
+                UserInfo
+            )
+        """
+        # Get JSON schema from Pydantic model
+        schema = response_model.model_json_schema()
+
+        # Get JSON response
+        json_response = await self.chat_json(prompt, schema, model)
+
+        # Validate and return Pydantic model
+        return response_model(**json_response)
+
+# FastAPI endpoint
+class JsonChatRequest(BaseModel):
+    prompt: str
+    schema: Dict = Field(default=None, description="Optional JSON schema")
+    model: str = Field(default="gemini-1.5-pro")
+
+@router.post("/chat/json")
+async def gemini_chat_json(request: JsonChatRequest):
+    """
+    Get structured JSON response
+
+    Example:
+    ```json
+    {
+      "prompt": "List 3 programming languages with their year created",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "year": {"type": "integer"}
+              }
+            }
+          }
+        }
+      }
+    }
+    ```
+    """
+    response = await gemini_service.chat_json(
+        request.prompt,
+        request.schema,
+        request.model
+    )
+    return response
+````
+
+### 5. Token Counting and Cost Estimation
+
+```python
+class GeminiService:
+    async def count_tokens(
+        self,
+        text: str,
+        model: str = "gemini-1.5-pro"
+    ) -> Dict:
+        """
+        Count tokens in text
+
+        Useful for cost estimation before making API calls
+        """
+        try:
+            model_instance = self.get_model(model)
+
+            result = await asyncio.to_thread(
+                model_instance.count_tokens,
+                text
+            )
+
+            return {
+                "total_tokens": result.total_tokens,
+                "text": text[:100] + "..." if len(text) > 100 else text
+            }
+
+        except Exception as e:
+            logger.error(f"Token counting error: {str(e)}")
+            raise HTTPException(500, str(e))
+
+    def estimate_cost(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        model: str = "gemini-1.5-pro"
+    ) -> Dict:
+        """
+        Estimate cost for API call
+
+        Pricing (as of 2024):
+        - gemini-1.5-pro: $1.25/M input, $5.00/M output
+        - gemini-1.5-flash: $0.075/M input, $0.30/M output
+        """
+        pricing = {
+            "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
+            "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+            "gemini-1.5-flash-8b": {"input": 0.0375, "output": 0.15}
+        }
+
+        if model not in pricing:
+            model = "gemini-1.5-pro"  # Default
+
+        input_cost = (input_tokens / 1_000_000) * pricing[model]["input"]
+        output_cost = (output_tokens / 1_000_000) * pricing[model]["output"]
+
+        return {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "input_cost_usd": round(input_cost, 6),
+            "output_cost_usd": round(output_cost, 6),
+            "total_cost_usd": round(input_cost + output_cost, 6),
+            "model": model
+        }
+
+@router.post("/tokens/count")
+async def count_tokens(text: str, model: str = "gemini-1.5-pro"):
+    """Count tokens in text"""
+    return await gemini_service.count_tokens(text, model)
+
+@router.post("/tokens/estimate-cost")
+async def estimate_cost(
+    input_tokens: int,
+    output_tokens: int,
+    model: str = "gemini-1.5-pro"
+):
+    """Estimate API call cost"""
+    return gemini_service.estimate_cost(input_tokens, output_tokens, model)
+```
+
+### 6. Native Multimodal Processing ⭐ UNIQUE FEATURE
 
 ```python
 from PIL import Image
@@ -295,7 +650,7 @@ class GeminiService:
         self,
         image_path: str,
         prompt: str = "Describe this image in detail",
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> str:
         """Analyze image with text prompt"""
         try:
@@ -320,7 +675,7 @@ class GeminiService:
         self,
         image_paths: List[str],
         prompt: str,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> str:
         """Analyze multiple images together"""
         try:
@@ -347,7 +702,7 @@ class GeminiService:
         self,
         video_path: str,
         prompt: str = "Describe what happens in this video",
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> str:
         """Analyze video content (Gemini unique feature!)"""
         try:
@@ -389,7 +744,7 @@ class GeminiService:
         self,
         audio_path: str,
         prompt: str = "Transcribe and summarize this audio",
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> str:
         """Analyze audio content"""
         try:
@@ -428,7 +783,7 @@ class GeminiService:
         image_paths: List[str] = None,
         video_path: str = None,
         audio_path: str = None,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> str:
         """
         Combined multimodal analysis
@@ -524,7 +879,7 @@ async def analyze_audio_upload(
     return {"analysis": result}
 ```
 
-### 5. Function Calling and Tools
+### 7. Function Calling and Tools
 
 ```python
 from google.generativeai.types import FunctionDeclaration, Tool
@@ -535,7 +890,7 @@ class GeminiService:
         self,
         prompt: str,
         functions: List[Dict],
-        model: str = "gemini-2.0-pro",
+        model: str = "gemini-1.5-pro",
         max_iterations: int = 5
     ) -> Dict:
         """Chat with function calling"""
@@ -695,14 +1050,14 @@ async def chat_with_tools(prompt: str):
     return result
 ```
 
-### 6. Code Execution ⭐ UNIQUE FEATURE
+### 8. Code Execution ⭐ UNIQUE FEATURE
 
 ```python
 class GeminiService:
     async def execute_code(
         self,
         prompt: str,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> Dict:
         """
         Use Gemini's built-in code execution
@@ -747,7 +1102,7 @@ class GeminiService:
         self,
         data_description: str,
         analysis_request: str,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> Dict:
         """
         Perform data analysis using code execution
@@ -770,7 +1125,7 @@ class GeminiService:
 @router.post("/code/execute")
 async def execute_code_endpoint(
     prompt: str,
-    model: str = "gemini-2.0-pro"
+    model: str = "gemini-1.5-pro"
 ):
     """
     Execute code with Gemini
@@ -792,14 +1147,14 @@ async def data_analysis_endpoint(
     return result
 ```
 
-### 7. Grounding with Google Search ⭐ UNIQUE FEATURE
+### 9. Grounding with Google Search ⭐ UNIQUE FEATURE
 
 ```python
 class GeminiService:
     async def chat_with_grounding(
         self,
         prompt: str,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> Dict:
         """
         Chat with Google Search grounding
@@ -848,7 +1203,7 @@ class GeminiService:
     async def answer_with_current_info(
         self,
         question: str,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> Dict:
         """
         Answer questions using real-time information
@@ -883,7 +1238,7 @@ async def current_info(question: str):
     return result
 ```
 
-### 8. Embeddings
+### 10. Embeddings
 
 ```python
 class GeminiEmbeddingService:
@@ -1001,7 +1356,7 @@ async def calculate_similarity(text1: str, text2: str):
     return {"similarity": similarity}
 ```
 
-### 9. Context Caching
+### 11. Context Caching
 
 ```python
 from google.generativeai import caching
@@ -1014,7 +1369,7 @@ class GeminiService:
         cached_content: str,
         user_message: str,
         cache_name: str = None,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> Dict:
         """
         Use context caching to reduce costs
@@ -1068,7 +1423,7 @@ class GeminiService:
         self,
         document: str,
         questions: List[str],
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> List[Dict]:
         """
         Answer multiple questions about a document using caching
@@ -1112,7 +1467,7 @@ async def cached_document_qa(
     return {"answers": answers}
 ```
 
-### 10. Production Patterns
+### 12. Production Patterns with Retry Logic
 
 ```python
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -1128,7 +1483,7 @@ class ProductionGeminiService(GeminiService):
     async def chat_with_retry(
         self,
         prompt: str,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> str:
         """Chat with automatic retry on failures"""
         return await self.chat(prompt, model)
@@ -1136,8 +1491,8 @@ class ProductionGeminiService(GeminiService):
     async def chat_with_fallback(
         self,
         prompt: str,
-        primary_model: str = "gemini-2.0-pro",
-        fallback_model: str = "gemini-2.0-flash"
+        primary_model: str = "gemini-1.5-pro",
+        fallback_model: str = "gemini-1.5-flash"
     ) -> Dict:
         """Try primary model, fallback to Flash on failure"""
         try:
@@ -1159,7 +1514,7 @@ class ProductionGeminiService(GeminiService):
         self,
         prompt: str,
         user_id: int,
-        model: str = "gemini-2.0-pro"
+        model: str = "gemini-1.5-pro"
     ) -> Dict:
         """Chat with cost and performance monitoring"""
         start_time = time.time()
@@ -1228,7 +1583,7 @@ async def production_chat(
     return result
 ```
 
-### 11. Safety Settings
+### 13. Safety Settings
 
 ```python
 class GeminiService:
@@ -1241,6 +1596,14 @@ class GeminiService:
     ) -> Dict:
         """
         Configure safety settings
+
+        Safety filters help prevent harmful content generation.
+        Adjust based on your use case:
+
+        - BLOCK_NONE: No filtering (use with caution)
+        - BLOCK_ONLY_HIGH: Block only high-probability harmful content
+        - BLOCK_MEDIUM_AND_ABOVE: Recommended for production (default)
+        - BLOCK_LOW_AND_ABOVE: Most restrictive
 
         Thresholds: BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE, BLOCK_LOW_AND_ABOVE
         """
@@ -1262,21 +1625,218 @@ class GeminiService:
 
         self.safety_settings = safety_settings
         return {"safety_configured": True}
+
+    def get_safety_ratings(self, response) -> List[Dict]:
+        """
+        Extract safety ratings from response
+
+        Useful for understanding why content was blocked
+        """
+        ratings = []
+
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'safety_ratings'):
+                for rating in candidate.safety_ratings:
+                    ratings.append({
+                        "category": rating.category.name,
+                        "probability": rating.probability.name,
+                        "blocked": rating.blocked if hasattr(rating, 'blocked') else False
+                    })
+
+        return ratings
+```
+
+### 14. Best Practices for Production
+
+```python
+class GeminiBestPractices:
+    """
+    Production-ready Gemini implementation with best practices
+    """
+
+    def __init__(self):
+        self.service = GeminiService()
+        self.request_cache = {}  # Simple cache (use Redis in production)
+
+    async def chat_with_best_practices(
+        self,
+        prompt: str,
+        user_id: str,
+        model: str = "gemini-1.5-flash",  # Start with Flash for cost optimization
+        enable_caching: bool = True,
+        max_retries: int = 3
+    ) -> Dict:
+        """
+        Chat with production best practices:
+        - Cost optimization (Flash first)
+        - Caching for repeated queries
+        - Retry logic
+        - Token counting
+        - Safety checking
+        - Usage tracking
+        """
+        import hashlib
+
+        # 1. Check cache for repeated queries
+        if enable_caching:
+            cache_key = hashlib.md5(f"{prompt}:{model}".encode()).hexdigest()
+            if cache_key in self.request_cache:
+                logger.info(f"Cache hit for user {user_id}")
+                return {
+                    **self.request_cache[cache_key],
+                    "cached": True
+                }
+
+        # 2. Count tokens before making request
+        token_info = await self.service.count_tokens(prompt, model)
+        input_tokens = token_info["total_tokens"]
+
+        # 3. Warn if prompt is too long
+        if input_tokens > 30000:  # Adjust threshold
+            logger.warning(f"Large prompt detected: {input_tokens} tokens")
+
+        # 4. Make request with retry logic
+        retry_count = 0
+        last_error = None
+
+        while retry_count < max_retries:
+            try:
+                response = await self.service.chat(prompt, model)
+
+                # 5. Count output tokens
+                output_token_info = await self.service.count_tokens(response, model)
+                output_tokens = output_token_info["total_tokens"]
+
+                # 6. Calculate cost
+                cost_info = self.service.estimate_cost(input_tokens, output_tokens, model)
+
+                result = {
+                    "response": response,
+                    "model": model,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cost_usd": cost_info["total_cost_usd"],
+                    "cached": False
+                }
+
+                # 7. Cache result
+                if enable_caching:
+                    self.request_cache[cache_key] = result
+
+                # 8. Log usage (implement with your logging system)
+                await self._log_usage(user_id, result)
+
+                return result
+
+            except HTTPException as e:
+                if e.status_code == 400:  # Safety block
+                    raise  # Don't retry safety blocks
+
+                last_error = e
+                retry_count += 1
+
+                if retry_count < max_retries:
+                    wait_time = 2 ** retry_count  # Exponential backoff
+                    logger.warning(f"Retry {retry_count}/{max_retries} after {wait_time}s")
+                    await asyncio.sleep(wait_time)
+            except Exception as e:
+                last_error = e
+                retry_count += 1
+
+                if retry_count < max_retries:
+                    await asyncio.sleep(2 ** retry_count)
+
+        # 9. All retries failed
+        raise HTTPException(500, f"Request failed after {max_retries} retries: {str(last_error)}")
+
+    async def _log_usage(self, user_id: str, result: Dict):
+        """Log usage for billing and monitoring"""
+        logger.info(f"Gemini usage - User: {user_id}, "
+                   f"Model: {result['model']}, "
+                   f"Tokens: {result['input_tokens']}+{result['output_tokens']}, "
+                   f"Cost: ${result['cost_usd']}")
+
+    async def smart_model_selection(
+        self,
+        prompt: str,
+        complexity: str = "auto"
+    ) -> str:
+        """
+        Automatically select best model based on task complexity
+
+        Args:
+            prompt: User prompt
+            complexity: 'simple', 'medium', 'complex', or 'auto'
+        """
+        if complexity == "auto":
+            # Count tokens to estimate complexity
+            token_info = await self.service.count_tokens(prompt)
+            tokens = token_info["total_tokens"]
+
+            # Simple heuristic (enhance with your logic)
+            if tokens < 100:
+                complexity = "simple"
+            elif tokens < 1000:
+                complexity = "medium"
+            else:
+                complexity = "complex"
+
+        model_map = {
+            "simple": "gemini-1.5-flash-8b",  # Cheapest, fastest
+            "medium": "gemini-1.5-flash",      # Balanced
+            "complex": "gemini-1.5-pro"        # Most capable
+        }
+
+        selected_model = model_map.get(complexity, "gemini-1.5-flash")
+        logger.info(f"Selected model: {selected_model} (complexity: {complexity})")
+
+        return selected_model
+
+# Production endpoint with best practices
+best_practices_service = GeminiBestPractices()
+
+@router.post("/production/chat-optimized")
+async def production_optimized_chat(
+    prompt: str,
+    user_id: str,
+    complexity: str = "auto"
+):
+    """
+    Production-optimized chat endpoint with:
+    - Smart model selection
+    - Caching
+    - Retry logic
+    - Cost tracking
+    - Token counting
+    """
+    # Select best model
+    model = await best_practices_service.smart_model_selection(prompt, complexity)
+
+    # Make request with best practices
+    result = await best_practices_service.chat_with_best_practices(
+        prompt=prompt,
+        user_id=user_id,
+        model=model
+    )
+
+    return result
 ```
 
 ## 🔄 Gemini vs OpenAI vs Claude: Comparison
 
-| Feature              | **Gemini**                      | **GPT-5**               | **Claude Sonnet 4.5** |
-| -------------------- | ------------------------------- | ----------------------- | --------------------- |
-| **Context Window**   | 2M (Pro/Ultra)                  | 1M+                     | 200K                  |
-| **Multimodal**       | Native (text+image+video+audio) | Text + Image            | Text + Image          |
-| **Code Execution**   | ✅ Built-in                     | ✅ Assistants API       | ❌                    |
-| **Grounding**        | ✅ Google Search                | ❌                      | ❌                    |
-| **Function Calling** | ✅ Good                         | ✅ Excellent            | ✅ Excellent          |
-| **Cost (Pro)**       | $1.25 / $5                      | Higher                  | $3 / $15              |
-| **Speed (Flash)**    | ⚡ Fastest                      | Fast                    | Fast                  |
-| **Best For**         | Multimodal, grounding, cost     | Complex reasoning       | Code generation       |
-| **Unique Strength**  | Native video/audio, Search      | Largest context, mature | Best for coding       |
+| Feature              | **Gemini**                      | **GPT-4o**                   | **Claude Sonnet 4** |
+| -------------------- | ------------------------------- | ---------------------------- | ------------------- |
+| **Context Window**   | 2M (1.5 Pro)                    | 128K                         | 200K                |
+| **Multimodal**       | Native (text+image+video+audio) | Text + Image + Audio         | Text + Image        |
+| **Code Execution**   | ✅ Built-in                     | ✅ Assistants API            | ❌                  |
+| **Grounding**        | ✅ Google Search                | ❌ (can use web search tool) | ❌                  |
+| **Function Calling** | ✅ Good                         | ✅ Excellent                 | ✅ Excellent        |
+| **JSON Mode**        | ✅ Native                       | ✅ Native                    | ✅ Good             |
+| **Cost (Best)**      | $0.075 / $0.30 (Flash)          | $2.50 / $10 (GPT-4o)         | $3 / $15            |
+| **Speed (Flash)**    | ⚡ Fastest                      | Fast                         | Fast                |
+| **Best For**         | Multimodal, grounding, cost     | General purpose, reliability | Code, reasoning     |
+| **Unique Strength**  | Native video, Search, cost      | Reliability, ecosystem       | Long reasoning      |
 
 ### When to Use Gemini
 
@@ -1287,12 +1847,13 @@ class GeminiService:
 - ✅ **Long context**: 2M tokens for Ultra and Pro
 - ✅ **Fast responses**: Flash model is extremely fast
 
-### When to Use GPT-5
+### When to Use GPT-4o
 
-- ✅ Complex reasoning and planning
-- ✅ Best function calling reliability
-- ✅ Mature ecosystem and tooling
-- ✅ Structured outputs with JSON schema
+- ✅ General-purpose applications
+- ✅ Best ecosystem and third-party integrations
+- ✅ Reliable function calling
+- ✅ Strong reasoning capabilities
+- ✅ Mature tooling and documentation
 
 ### When to Use Claude
 
@@ -1367,7 +1928,7 @@ class GeminiLiveService:
 async def grounded_image_analysis(image_path: str, question: str):
     """Analyze image and ground answer with search"""
     model = genai.GenerativeModel(
-        model_name="gemini-2.0-pro",
+        model_name="gemini-1.5-pro",
         tools=[{"google_search": {}}]
     )
 

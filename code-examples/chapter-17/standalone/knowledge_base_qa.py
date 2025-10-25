@@ -73,7 +73,7 @@ async def ask_question(question: str):
     
     # Generate answer
     response = openai.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5",  # GPT-5 for RAG
         messages=[
             {"role": "system", "content": "Answer based on the context provided."},
             {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"}

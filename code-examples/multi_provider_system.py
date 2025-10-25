@@ -83,7 +83,7 @@ class OpenAIProvider(LLMProvider):
     def __init__(self):
         from openai import AsyncOpenAI
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        self.default_model = "gpt-5-turbo"
+        self.default_model = "gpt-5"
     
     async def chat(
         self,
@@ -134,12 +134,12 @@ class OpenAIProvider(LLMProvider):
 # ============================================================================
 
 class ClaudeProvider(LLMProvider):
-    """Claude Sonnet 4.5 implementation"""
+    """Claude Sonnet 4.5 implementation (latest September 2025)"""
     
     def __init__(self):
         from anthropic import AsyncAnthropic
         self.client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self.default_model = "claude-sonnet-4-20250514"
+        self.default_model = "claude-sonnet-4-5"  # Latest Sonnet 4.5
     
     async def chat(
         self,

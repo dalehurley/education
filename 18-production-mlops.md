@@ -6,13 +6,30 @@
 
 By the end of this chapter, you will:
 
-- Understand fine-tuning and when to use it
-- Deploy local LLMs with Ollama and llama.cpp
-- Integrate Hugging Face models
-- Implement ML Ops monitoring and versioning
-- Optimize costs and performance
-- Ensure AI safety, ethics, and compliance
-- Deploy production-ready AI systems
+- Understand fine-tuning and when to use it vs. RAG/prompt engineering
+- Deploy and manage local LLMs with Ollama
+- Integrate Hugging Face models for specialized tasks
+- Implement comprehensive MLOps monitoring with Prometheus and database logging
+- Build deployment strategies (A/B testing, canary, blue/green)
+- Optimize costs and performance with caching and batching
+- Ensure AI safety, ethics, and compliance (GDPR, SOC2)
+- Implement content moderation and PII detection
+- Test ML/AI systems effectively
+- Deploy production-ready AI systems with confidence
+
+## 🌟 What's New in This Chapter
+
+This chapter covers production-grade practices essential for deploying AI/ML systems:
+
+- **Complete code examples** with proper error handling, logging, and type hints
+- **Security best practices** including SQL injection prevention and input validation
+- **Database models** for audit logging and monitoring
+- **Dependency injection** patterns for better testability
+- **Comprehensive testing** strategies for ML systems
+- **Deployment strategies** with traffic splitting and versioning
+- **Performance optimization** with caching and batching
+- **Compliance features** for GDPR and data governance
+- **Production checklist** to ensure readiness before deployment
 
 ## 📖 Production AI Architecture
 
@@ -43,20 +60,25 @@ Evaluation & Iteration
 
 ```python
 from openai import AsyncOpenAI
-from typing import List, Dict
+from typing import List, Dict, Optional
+from pydantic import BaseModel
+from pathlib import Path
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class FineTuningService:
     """Manage OpenAI fine-tuning"""
 
-    def __init__(self):
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    def __init__(self, api_key: str):
+        self.client = AsyncOpenAI(api_key=api_key)
 
     def prepare_training_data(
         self,
         examples: List[Dict[str, str]],
         output_file: str = "training_data.jsonl"
-    ):
+    ) -> str:
         """
         Prepare training data in required format
 
@@ -67,25 +89,44 @@ class FineTuningService:
             {"role": "assistant", "content": "..."}
         ]}
         """
+        try:
+            output_path = Path(output_file)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_file, 'w') as f:
-            for example in examples:
-                f.write(json.dumps({
-                    "messages": example["messages"]
-                }) + "\n")
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for i, example in enumerate(examples):
+                    if "messages" not in example:
+                        raise ValueError(f"Example {i} missing 'messages' key")
 
-        return output_file
+                    f.write(json.dumps({
+                        "messages": example["messages"]
+                    }) + "\n")
+
+            logger.info(f"Prepared {len(examples)} training examples in {output_file}")
+            return str(output_path)
+
+        except Exception as e:
+            logger.error(f"Error preparing training data: {e}")
+            raise
 
     async def upload_training_file(self, file_path: str) -> str:
-        """Upload training file"""
+        """Upload training file to OpenAI"""
+        try:
+            if not Path(file_path).exists():
+                raise FileNotFoundError(f"Training file not found: {file_path}")
 
-        with open(file_path, "rb") as f:
-            file_response = await self.client.files.create(
-                file=f,
-                purpose="fine-tune"
-            )
+            with open(file_path, "rb") as f:
+                file_response = await self.client.files.create(
+                    file=f,
+                    purpose="fine-tune"
+                )
 
-        return file_response.id
+            logger.info(f"Uploaded file {file_path}, ID: {file_response.id}")
+            return file_response.id
+
+        except Exception as e:
+            logger.error(f"Error uploading training file: {e}")
+            raise
 
     async def create_fine_tune_job(
         self,
@@ -155,38 +196,96 @@ class FineTuningService:
 
         return response.choices[0].message.content
 
-# FastAPI endpoints
+# Pydantic models for requests/responses
+class TrainingDataRequest(BaseModel):
+    examples: List[Dict]
+    output_file: Optional[str] = "training_data.jsonl"
+
+class FineTuneJobRequest(BaseModel):
+    training_file_path: str
+    model: str = "gpt-3.5-turbo"
+    suffix: Optional[str] = "custom"
+    hyperparameters: Optional[Dict] = None
+
+class FineTuneJobResponse(BaseModel):
+    job_id: str
+    file_id: str
+    status: str = "created"
+
+# FastAPI endpoints with dependency injection
+from fastapi import APIRouter, Depends, HTTPException, status
+from functools import lru_cache
+
 router = APIRouter(prefix="/ml", tags=["ML Ops"])
 
-@router.post("/finetune/prepare")
-async def prepare_training_data(examples: List[Dict]):
-    """Prepare training data"""
-    ft_service = FineTuningService()
-    output_file = ft_service.prepare_training_data(examples)
-    return {"file": output_file}
+@lru_cache()
+def get_settings():
+    """Get application settings (implement based on your config)"""
+    from core.config import Settings
+    return Settings()
 
-@router.post("/finetune/start")
+def get_finetuning_service(settings = Depends(get_settings)) -> FineTuningService:
+    """Dependency for FineTuningService"""
+    return FineTuningService(api_key=settings.OPENAI_API_KEY)
+
+@router.post("/finetune/prepare", response_model=Dict[str, str])
+async def prepare_training_data(
+    request: TrainingDataRequest,
+    service: FineTuningService = Depends(get_finetuning_service)
+):
+    """Prepare training data for fine-tuning"""
+    try:
+        output_file = service.prepare_training_data(
+            request.examples,
+            request.output_file
+        )
+        return {"file": output_file, "status": "success"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.post("/finetune/start", response_model=FineTuneJobResponse)
 async def start_fine_tuning(
-    training_file_path: str,
-    model: str = "gpt-3.5-turbo"
+    request: FineTuneJobRequest,
+    service: FineTuningService = Depends(get_finetuning_service)
 ):
     """Start fine-tuning job"""
-    ft_service = FineTuningService()
+    try:
+        # Upload file
+        file_id = await service.upload_training_file(request.training_file_path)
 
-    # Upload file
-    file_id = await ft_service.upload_training_file(training_file_path)
+        # Create job
+        job_id = await service.create_fine_tune_job(
+            file_id,
+            request.model,
+            request.suffix,
+            request.hyperparameters
+        )
 
-    # Create job
-    job_id = await ft_service.create_fine_tune_job(file_id, model)
+        return FineTuneJobResponse(job_id=job_id, file_id=file_id)
 
-    return {"job_id": job_id, "file_id": file_id}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start fine-tuning: {str(e)}"
+        )
 
 @router.get("/finetune/status/{job_id}")
-async def check_status(job_id: str):
-    """Check fine-tuning status"""
-    ft_service = FineTuningService()
-    status = await ft_service.check_job_status(job_id)
-    return status
+async def check_status(
+    job_id: str,
+    service: FineTuningService = Depends(get_finetuning_service)
+):
+    """Check fine-tuning job status"""
+    try:
+        status = await service.check_job_status(job_id)
+        return status
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job not found: {str(e)}"
+        )
 ```
 
 ### 3. Local LLMs with Ollama
@@ -204,13 +303,18 @@ ollama pull codellama
 
 ```python
 import httpx
-from typing import AsyncIterator
+import json
+from typing import AsyncIterator, List, Dict, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 class OllamaService:
     """Local LLM with Ollama"""
 
     def __init__(self, base_url: str = "http://localhost:11434"):
         self.base_url = base_url
+        logger.info(f"Initialized OllamaService with base_url: {base_url}")
 
     async def generate(
         self,
@@ -220,24 +324,33 @@ class OllamaService:
         temperature: float = 0.7
     ) -> str:
         """Generate completion"""
-
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            payload = {
-                "model": model,
-                "prompt": prompt,
-                "system": system,
-                "stream": False,
-                "options": {
-                    "temperature": temperature
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                payload = {
+                    "model": model,
+                    "prompt": prompt,
+                    "system": system,
+                    "stream": False,
+                    "options": {
+                        "temperature": temperature
+                    }
                 }
-            }
 
-            response = await client.post(
-                f"{self.base_url}/api/generate",
-                json=payload
-            )
+                response = await client.post(
+                    f"{self.base_url}/api/generate",
+                    json=payload
+                )
+                response.raise_for_status()
 
-            return response.json()["response"]
+                result = response.json()
+                return result.get("response", "")
+
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error calling Ollama: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error generating with Ollama: {e}")
+            raise
 
     async def generate_stream(
         self,
@@ -305,34 +418,74 @@ class OllamaService:
 
             return response.json()
 
+# Pydantic models for Ollama
+class Message(BaseModel):
+    role: str
+    content: str
+
+class OllamaGenerateRequest(BaseModel):
+    prompt: str
+    model: str = "llama2"
+    system: str = ""
+    temperature: float = 0.7
+
+class OllamaChatRequest(BaseModel):
+    messages: List[Message]
+    model: str = "llama2"
+
+def get_ollama_service() -> OllamaService:
+    """Dependency for OllamaService"""
+    return OllamaService()
+
 @router.post("/ollama/generate")
 async def ollama_generate(
-    prompt: str,
-    model: str = "llama2",
-    system: str = ""
+    request: OllamaGenerateRequest,
+    service: OllamaService = Depends(get_ollama_service)
 ):
     """Generate with local Ollama model"""
-    ollama = OllamaService()
-    response = await ollama.generate(prompt, model, system)
-    return {"response": response}
+    try:
+        response = await service.generate(
+            request.prompt,
+            request.model,
+            request.system,
+            request.temperature
+        )
+        return {"response": response, "model": request.model}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ollama generation failed: {str(e)}"
+        )
 
 @router.post("/ollama/chat")
 async def ollama_chat(
-    messages: List[Message],
-    model: str = "llama2"
+    request: OllamaChatRequest,
+    service: OllamaService = Depends(get_ollama_service)
 ):
     """Chat with Ollama"""
-    ollama = OllamaService()
-    msgs = [msg.dict() for msg in messages]
-    response = await ollama.chat(msgs, model)
-    return {"response": response}
+    try:
+        msgs = [msg.dict() for msg in request.messages]
+        response = await service.chat(msgs, request.model)
+        return {"response": response, "model": request.model}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ollama chat failed: {str(e)}"
+        )
 
 @router.get("/ollama/models")
-async def list_ollama_models():
+async def list_ollama_models(
+    service: OllamaService = Depends(get_ollama_service)
+):
     """List available Ollama models"""
-    ollama = OllamaService()
-    models = await ollama.list_models()
-    return {"models": models}
+    try:
+        models = await service.list_models()
+        return {"models": models, "count": len(models)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list models: {str(e)}"
+        )
 ```
 
 ### 4. Hugging Face Integration
@@ -466,7 +619,32 @@ async def create_embeddings(texts: List[str]):
 
 ```python
 from prometheus_client import Counter, Histogram, Gauge
+from sqlalchemy import Column, Integer, String, Float, DateTime, select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timedelta
 import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Database models
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
+class InferenceLog(Base):
+    """Database model for inference logging"""
+    __tablename__ = "inference_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    model = Column(String, index=True)
+    input_tokens = Column(Integer)
+    output_tokens = Column(Integer)
+    latency = Column(Float)
+    cost = Column(Float)
+    status = Column(String, index=True)
+    user_id = Column(Integer, index=True, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
 # Prometheus metrics
 llm_requests = Counter(
@@ -536,60 +714,98 @@ class MLOpsMonitor:
     async def get_metrics(
         self,
         hours: int = 24,
-        model: str = None
+        model: Optional[str] = None
     ) -> Dict:
-        """Get aggregated metrics"""
+        """Get aggregated metrics (using safe SQLAlchemy queries)"""
+        try:
+            # Calculate time threshold
+            time_threshold = datetime.utcnow() - timedelta(hours=hours)
 
-        # Query database
-        query = f"""
-            SELECT
-                model,
-                COUNT(*) as requests,
-                AVG(latency) as avg_latency,
-                SUM(input_tokens) as total_input_tokens,
-                SUM(output_tokens) as total_output_tokens,
-                SUM(cost) as total_cost,
-                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate
-            FROM inference_logs
-            WHERE timestamp > NOW() - INTERVAL '{hours} hours'
-            {f"AND model = '{model}'" if model else ""}
-            GROUP BY model
-        """
+            # Build query using SQLAlchemy
+            query = select(
+                InferenceLog.model,
+                func.count().label("requests"),
+                func.avg(InferenceLog.latency).label("avg_latency"),
+                func.sum(InferenceLog.input_tokens).label("total_input_tokens"),
+                func.sum(InferenceLog.output_tokens).label("total_output_tokens"),
+                func.sum(InferenceLog.cost).label("total_cost"),
+                (
+                    func.sum(
+                        func.case((InferenceLog.status == "success", 1), else_=0)
+                    ) * 100.0 / func.count()
+                ).label("success_rate")
+            ).where(
+                InferenceLog.timestamp > time_threshold
+            )
 
-        result = await self.db.execute(query)
-        rows = result.fetchall()
+            # Add model filter if specified
+            if model:
+                query = query.where(InferenceLog.model == model)
 
-        return {
-            "metrics": [
-                {
-                    "model": row.model,
-                    "requests": row.requests,
-                    "avg_latency": row.avg_latency,
-                    "total_tokens": row.total_input_tokens + row.total_output_tokens,
-                    "total_cost": row.total_cost,
-                    "success_rate": row.success_rate
-                }
-                for row in rows
-            ]
-        }
+            query = query.group_by(InferenceLog.model)
+
+            result = await self.db.execute(query)
+            rows = result.fetchall()
+
+            return {
+                "metrics": [
+                    {
+                        "model": row.model,
+                        "requests": row.requests,
+                        "avg_latency": round(row.avg_latency, 4) if row.avg_latency else 0,
+                        "total_tokens": (row.total_input_tokens or 0) + (row.total_output_tokens or 0),
+                        "total_cost": round(row.total_cost, 4) if row.total_cost else 0,
+                        "success_rate": round(row.success_rate, 2) if row.success_rate else 0
+                    }
+                    for row in rows
+                ],
+                "period_hours": hours,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching metrics: {e}")
+            raise
 
 # Middleware for automatic monitoring
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 class MLMonitoringMiddleware(BaseHTTPMiddleware):
     """Automatically monitor all ML requests"""
 
-    async def dispatch(self, request, call_next):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        # Only monitor ML/AI endpoints
+        if not request.url.path.startswith(("/ml/", "/ai/")):
+            return await call_next(request)
+
         start_time = time.time()
 
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+            latency = time.time() - start_time
 
-        latency = time.time() - start_time
+            # Log successful request
+            logger.info(
+                f"ML Request: {request.url.path} - "
+                f"Status: {response.status_code} - "
+                f"Latency: {latency:.3f}s"
+            )
 
-        # Log to monitoring system
-        # (In production, use async task queue)
+            # In production, send to async task queue for DB logging
+            # background_tasks.add_task(log_to_db, ...)
 
-        return response
+            return response
+
+        except Exception as e:
+            latency = time.time() - start_time
+            logger.error(
+                f"ML Request Failed: {request.url.path} - "
+                f"Error: {str(e)} - "
+                f"Latency: {latency:.3f}s"
+            )
+            raise
 ```
 
 ### 6. Cost Optimization
@@ -600,7 +816,7 @@ class CostOptimizer:
 
     def __init__(self):
         self.pricing = {
-            "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
+            "gpt-5": {"input": 0.015, "output": 0.045},  # GPT-5
             "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
             "claude-sonnet-4": {"input": 0.003, "output": 0.015},
             "claude-haiku": {"input": 0.00025, "output": 0.00125}
@@ -638,7 +854,7 @@ class CostOptimizer:
         recommendations = {
             "simple": "claude-haiku",
             "medium": "gpt-3.5-turbo",
-            "complex": "gpt-4-turbo-preview"
+            "complex": "gpt-5"  # GPT-5 for complex tasks
         }
 
         return recommendations.get(task_complexity, "gpt-3.5-turbo")
@@ -762,9 +978,9 @@ Respond with JSON:
     "explanation": "explanation"
 }}"""
 
-        # Use GPT-4 for analysis
+        # Use GPT-5 for analysis
         response = await self.openai_client.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            model="gpt-5",  # GPT-5 for data analysis
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
         )
@@ -796,6 +1012,29 @@ async def redact_pii(text: str):
 ### 8. Compliance (GDPR, SOC2)
 
 ```python
+from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timedelta
+from typing import Dict, Optional, List
+import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Database model for audit logging
+class DataAccessLog(Base):
+    """Database model for data access audit logging"""
+    __tablename__ = "data_access_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    data_type = Column(String, index=True)
+    action = Column(String, index=True)  # read, write, delete, export
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    details = Column(Text, nullable=True)
+
 class ComplianceService:
     """Compliance and data governance"""
 
@@ -804,20 +1043,31 @@ class ComplianceService:
         user_id: int,
         data_type: str,
         action: str,
-        db: AsyncSession
+        db: AsyncSession,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        details: Optional[str] = None
     ):
-        """Log data access for audit"""
+        """Log data access for audit trail"""
+        try:
+            log_entry = DataAccessLog(
+                user_id=user_id,
+                data_type=data_type,
+                action=action,
+                timestamp=datetime.utcnow(),
+                ip_address=ip_address,
+                user_agent=user_agent,
+                details=details
+            )
 
-        log_entry = DataAccessLog(
-            user_id=user_id,
-            data_type=data_type,
-            action=action,
-            timestamp=datetime.utcnow(),
-            ip_address=request.client.host
-        )
+            db.add(log_entry)
+            await db.commit()
+            logger.info(f"Logged data access: user={user_id}, type={data_type}, action={action}")
 
-        db.add(log_entry)
-        await db.commit()
+        except Exception as e:
+            logger.error(f"Error logging data access: {e}")
+            await db.rollback()
+            raise
 
     async def export_user_data(
         self,
@@ -825,45 +1075,532 @@ class ComplianceService:
         db: AsyncSession
     ) -> Dict:
         """Export all user data (GDPR right to access)"""
+        try:
+            # Log the data export request
+            await self.log_data_access(
+                user_id=user_id,
+                data_type="all_user_data",
+                action="export",
+                db=db
+            )
 
-        # Collect all user data from various tables
-        user_data = {
-            "user_info": {},
-            "conversations": [],
-            "documents": [],
-            "api_usage": []
-        }
+            # Collect all user data from various tables
+            # In production, query all tables that contain user data
+            user_data = {
+                "user_info": {},
+                "conversations": [],
+                "documents": [],
+                "api_usage": [],
+                "inference_logs": [],
+                "export_date": datetime.utcnow().isoformat()
+            }
 
-        # Implementation would query all relevant tables
+            # Example: Query inference logs for this user
+            logs_query = select(InferenceLog).where(InferenceLog.user_id == user_id)
+            result = await db.execute(logs_query)
+            logs = result.scalars().all()
 
-        return user_data
+            user_data["inference_logs"] = [
+                {
+                    "model": log.model,
+                    "timestamp": log.timestamp.isoformat(),
+                    "tokens": log.input_tokens + log.output_tokens,
+                    "cost": log.cost
+                }
+                for log in logs
+            ]
+
+            logger.info(f"Exported data for user {user_id}")
+            return user_data
+
+        except Exception as e:
+            logger.error(f"Error exporting user data: {e}")
+            raise
 
     async def delete_user_data(
         self,
         user_id: int,
-        db: AsyncSession
+        db: AsyncSession,
+        reason: str = "user_request"
     ):
         """Delete all user data (GDPR right to erasure)"""
+        try:
+            # Log the deletion request BEFORE deleting
+            await self.log_data_access(
+                user_id=user_id,
+                data_type="all_user_data",
+                action="delete",
+                db=db,
+                details=f"Reason: {reason}"
+            )
 
-        # Delete from all tables
-        # Implementation would cascade delete
+            # Delete from all tables with user data
+            # Use CASCADE relationships or manual deletion
 
-        pass
+            # Example: Delete inference logs
+            await db.execute(
+                InferenceLog.__table__.delete().where(
+                    InferenceLog.user_id == user_id
+                )
+            )
+
+            # Delete data access logs (except the deletion log itself)
+            delete_threshold = datetime.utcnow()
+            await db.execute(
+                DataAccessLog.__table__.delete().where(
+                    DataAccessLog.user_id == user_id,
+                    DataAccessLog.timestamp < delete_threshold
+                )
+            )
+
+            await db.commit()
+            logger.info(f"Deleted all data for user {user_id}, reason: {reason}")
+
+        except Exception as e:
+            logger.error(f"Error deleting user data: {e}")
+            await db.rollback()
+            raise
 
     def anonymize_data(self, data: Dict) -> Dict:
-        """Anonymize data for analytics"""
+        """Anonymize data for analytics (GDPR/privacy compliance)"""
 
-        # Remove PII
         anonymized = data.copy()
-        pii_fields = ["name", "email", "phone", "address"]
+        pii_fields = ["name", "email", "phone", "address", "ip_address"]
 
         for field in pii_fields:
             if field in anonymized:
+                # Hash PII to create consistent anonymized identifier
                 anonymized[field] = hashlib.sha256(
                     str(anonymized[field]).encode()
                 ).hexdigest()[:16]
 
+        # Remove other sensitive fields
+        sensitive_fields = ["password", "api_key", "token", "secret"]
+        for field in sensitive_fields:
+            if field in anonymized:
+                anonymized[field] = "[REDACTED]"
+
         return anonymized
+
+    async def get_audit_trail(
+        self,
+        user_id: Optional[int] = None,
+        action: Optional[str] = None,
+        hours: int = 24,
+        db: AsyncSession = None
+    ) -> List[Dict]:
+        """Get audit trail for compliance reporting"""
+        try:
+            time_threshold = datetime.utcnow() - timedelta(hours=hours)
+
+            query = select(DataAccessLog).where(
+                DataAccessLog.timestamp > time_threshold
+            )
+
+            if user_id:
+                query = query.where(DataAccessLog.user_id == user_id)
+
+            if action:
+                query = query.where(DataAccessLog.action == action)
+
+            query = query.order_by(DataAccessLog.timestamp.desc())
+
+            result = await db.execute(query)
+            logs = result.scalars().all()
+
+            return [
+                {
+                    "user_id": log.user_id,
+                    "data_type": log.data_type,
+                    "action": log.action,
+                    "timestamp": log.timestamp.isoformat(),
+                    "ip_address": log.ip_address,
+                    "details": log.details
+                }
+                for log in logs
+            ]
+
+        except Exception as e:
+            logger.error(f"Error fetching audit trail: {e}")
+            raise
+```
+
+### 9. Testing ML/AI Systems
+
+```python
+import pytest
+from unittest.mock import Mock, patch, AsyncMock
+from httpx import Response
+
+class TestMLOpsMonitor:
+    """Test ML monitoring functionality"""
+
+    @pytest.mark.asyncio
+    async def test_log_inference(self):
+        """Test inference logging"""
+        mock_db = AsyncMock()
+        monitor = MLOpsMonitor(db=mock_db)
+
+        await monitor.log_inference(
+            model="gpt-5",  # GPT-5
+            input_tokens=100,
+            output_tokens=200,
+            latency=1.5,
+            cost=0.05,
+            status="success"
+        )
+
+        # Verify database add was called
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_metrics(self):
+        """Test metrics retrieval"""
+        mock_db = AsyncMock()
+        monitor = MLOpsMonitor(db=mock_db)
+
+        # Mock database response
+        mock_result = Mock()
+        mock_result.fetchall.return_value = []
+        mock_db.execute.return_value = mock_result
+
+        metrics = await monitor.get_metrics(hours=24)
+
+        assert "metrics" in metrics
+        assert "period_hours" in metrics
+
+class TestOllamaService:
+    """Test Ollama integration"""
+
+    @pytest.mark.asyncio
+    async def test_generate(self):
+        """Test text generation"""
+        service = OllamaService()
+
+        with patch('httpx.AsyncClient') as mock_client:
+            # Mock successful response
+            mock_response = Mock()
+            mock_response.json.return_value = {"response": "Test output"}
+            mock_response.raise_for_status = Mock()
+
+            mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
+
+            result = await service.generate(prompt="Test prompt")
+
+            assert result == "Test output"
+
+    @pytest.mark.asyncio
+    async def test_generate_error_handling(self):
+        """Test error handling"""
+        service = OllamaService()
+
+        with patch('httpx.AsyncClient') as mock_client:
+            # Mock error response
+            mock_client.return_value.__aenter__.return_value.post.side_effect = Exception("Connection error")
+
+            with pytest.raises(Exception):
+                await service.generate(prompt="Test prompt")
+
+class TestContentSafety:
+    """Test content safety features"""
+
+    def test_detect_pii(self):
+        """Test PII detection"""
+        safety = ContentSafetyService()
+
+        text = "Contact me at john@example.com or 555-123-4567"
+        pii = safety.detect_pii(text)
+
+        assert len(pii) == 2
+        assert any(p["type"] == "email" for p in pii)
+        assert any(p["type"] == "phone" for p in pii)
+
+    def test_redact_pii(self):
+        """Test PII redaction"""
+        safety = ContentSafetyService()
+
+        text = "My email is john@example.com"
+        redacted = safety.redact_pii(text)
+
+        assert "john@example.com" not in redacted
+        assert "[REDACTED_EMAIL]" in redacted
+
+class TestCostOptimizer:
+    """Test cost optimization"""
+
+    def test_estimate_cost(self):
+        """Test cost estimation"""
+        optimizer = CostOptimizer()
+
+        cost = optimizer.estimate_cost(
+            model="gpt-3.5-turbo",
+            input_tokens=1000,
+            output_tokens=500
+        )
+
+        assert "total_cost" in cost
+        assert cost["total_cost"] > 0
+
+    def test_recommend_model(self):
+        """Test model recommendation"""
+        optimizer = CostOptimizer()
+
+        model = optimizer.recommend_model(task_complexity="simple")
+        assert model in ["claude-haiku", "gpt-4.1-nano"]
+```
+
+### 10. Deployment Strategies
+
+```python
+from enum import Enum
+from typing import List, Callable, Dict
+import random
+import logging
+
+logger = logging.getLogger(__name__)
+
+class DeploymentStrategy(Enum):
+    """Deployment strategies for ML models"""
+    BLUE_GREEN = "blue_green"
+    CANARY = "canary"
+    A_B_TEST = "a_b_test"
+    SHADOW = "shadow"
+
+class ModelDeployment:
+    """Manage model deployments and routing"""
+
+    def __init__(self):
+        self.models = {}
+        self.traffic_split = {}
+        self.strategy = DeploymentStrategy.A_B_TEST
+
+    def register_model(
+        self,
+        name: str,
+        version: str,
+        model_callable: Callable,
+        traffic_percentage: int = 0
+    ):
+        """Register a model version"""
+        model_id = f"{name}:{version}"
+        self.models[model_id] = {
+            "callable": model_callable,
+            "version": version,
+            "name": name
+        }
+        self.traffic_split[model_id] = traffic_percentage
+        logger.info(f"Registered model {model_id} with {traffic_percentage}% traffic")
+
+    def route_request(self, model_name: str) -> str:
+        """Route request to appropriate model version"""
+
+        # Get all versions of this model
+        versions = [
+            mid for mid in self.models.keys()
+            if mid.startswith(f"{model_name}:")
+        ]
+
+        if not versions:
+            raise ValueError(f"No versions found for model {model_name}")
+
+        # A/B testing: route based on traffic split
+        if self.strategy == DeploymentStrategy.A_B_TEST:
+            rand = random.random() * 100
+            cumulative = 0
+
+            for model_id in versions:
+                cumulative += self.traffic_split.get(model_id, 0)
+                if rand <= cumulative:
+                    return model_id
+
+            # Default to last version
+            return versions[-1]
+
+        # Blue/Green: route all traffic to highest version
+        elif self.strategy == DeploymentStrategy.BLUE_GREEN:
+            return max(versions)
+
+        # Canary: route small % to new version
+        elif self.strategy == DeploymentStrategy.CANARY:
+            if random.random() < 0.05:  # 5% canary traffic
+                return max(versions)  # New version
+            return min(versions)  # Old version
+
+        return versions[0]
+
+    async def execute_with_routing(
+        self,
+        model_name: str,
+        *args,
+        **kwargs
+    ):
+        """Execute model with automatic routing"""
+
+        model_id = self.route_request(model_name)
+        model_info = self.models[model_id]
+
+        logger.info(f"Routing to {model_id}")
+
+        result = await model_info["callable"](*args, **kwargs)
+
+        return {
+            "result": result,
+            "model_id": model_id,
+            "version": model_info["version"]
+        }
+
+    def update_traffic_split(self, updates: Dict[str, int]):
+        """Update traffic split for A/B testing"""
+        total = sum(updates.values())
+        if total != 100:
+            raise ValueError("Traffic split must sum to 100%")
+
+        self.traffic_split.update(updates)
+        logger.info(f"Updated traffic split: {updates}")
+
+# Example usage
+deployment = ModelDeployment()
+
+# Register model versions
+deployment.register_model(
+    name="summarizer",
+    version="v1.0",
+    model_callable=lambda text: f"Summary v1: {text[:50]}",
+    traffic_percentage=70
+)
+
+deployment.register_model(
+    name="summarizer",
+    version="v2.0",
+    model_callable=lambda text: f"Summary v2: {text[:100]}",
+    traffic_percentage=30
+)
+
+@router.post("/ml/deploy/update-traffic")
+async def update_traffic_split(updates: Dict[str, int]):
+    """Update traffic split for A/B testing"""
+    try:
+        deployment.update_traffic_split(updates)
+        return {"status": "success", "traffic_split": updates}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.get("/ml/deploy/status")
+async def get_deployment_status():
+    """Get deployment status"""
+    return {
+        "models": list(deployment.models.keys()),
+        "traffic_split": deployment.traffic_split,
+        "strategy": deployment.strategy.value
+    }
+```
+
+### 11. Performance Optimization
+
+```python
+from functools import lru_cache
+from aiocache import cached, Cache
+from aiocache.serializers import JsonSerializer
+from typing import List
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+class PerformanceOptimizer:
+    """Optimize ML/AI performance"""
+
+    def __init__(self):
+        self.cache = Cache(Cache.REDIS)
+
+    @cached(ttl=300, cache=Cache.MEMORY)
+    async def cached_embedding(self, text: str) -> List[float]:
+        """Cache embeddings for frequently used text"""
+        # Expensive embedding operation
+        hf = HuggingFaceService()
+        return hf.create_embeddings([text])[0]
+
+    async def batch_inference(
+        self,
+        prompts: List[str],
+        model: str,
+        batch_size: int = 10
+    ) -> List[str]:
+        """Batch multiple requests for efficiency"""
+
+        results = []
+        for i in range(0, len(prompts), batch_size):
+            batch = prompts[i:i + batch_size]
+
+            # Process batch in parallel
+            tasks = [
+                self.single_inference(prompt, model)
+                for prompt in batch
+            ]
+            batch_results = await asyncio.gather(*tasks)
+            results.extend(batch_results)
+
+        return results
+
+    async def single_inference(self, prompt: str, model: str) -> str:
+        """Single inference (to be implemented based on provider)"""
+        # Implementation depends on the model provider
+        pass
+
+    def rate_limit(
+        self,
+        max_requests: int = 100,
+        window_seconds: int = 60
+    ):
+        """Rate limiting decorator"""
+
+        from collections import deque
+        from time import time
+
+        request_times = deque()
+
+        def decorator(func):
+            async def wrapper(*args, **kwargs):
+                now = time()
+
+                # Remove old requests outside window
+                while request_times and request_times[0] < now - window_seconds:
+                    request_times.popleft()
+
+                if len(request_times) >= max_requests:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Rate limit exceeded"
+                    )
+
+                request_times.append(now)
+                return await func(*args, **kwargs)
+
+            return wrapper
+        return decorator
+
+# Example usage
+optimizer = PerformanceOptimizer()
+
+@router.post("/ml/embed/batch")
+@optimizer.rate_limit(max_requests=50, window_seconds=60)
+async def batch_embed(texts: List[str]):
+    """Batch embedding endpoint with rate limiting"""
+    try:
+        embeddings = await optimizer.batch_inference(
+            prompts=texts,
+            model="embeddings"
+        )
+        return {"embeddings": embeddings, "count": len(embeddings)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 ```
 
 ## 📝 Final Project
@@ -898,6 +1635,61 @@ Build a complete production AI application that includes:
    - Audit logging
    - Data export
    - GDPR compliance
+
+## 🎯 Production Checklist
+
+Before deploying your ML/AI system to production, ensure you have:
+
+### Infrastructure
+
+- [ ] **Load balancing** configured for high availability
+- [ ] **Auto-scaling** based on traffic patterns
+- [ ] **Health checks** and monitoring endpoints
+- [ ] **Backup and disaster recovery** plans
+- [ ] **CI/CD pipeline** for automated deployments
+
+### Security
+
+- [ ] **API authentication** and authorization
+- [ ] **Rate limiting** to prevent abuse
+- [ ] **Input validation** and sanitization
+- [ ] **Secrets management** (never hardcode API keys)
+- [ ] **HTTPS** for all endpoints
+- [ ] **CORS** properly configured
+
+### ML/AI Specific
+
+- [ ] **Model versioning** and registry
+- [ ] **A/B testing** infrastructure
+- [ ] **Fallback models** for high availability
+- [ ] **Cost monitoring** and alerts
+- [ ] **Latency monitoring** and optimization
+- [ ] **Content moderation** for user inputs/outputs
+- [ ] **PII detection** and handling
+
+### Compliance
+
+- [ ] **Data retention** policies
+- [ ] **Audit logging** for all data access
+- [ ] **GDPR compliance** (data export/deletion)
+- [ ] **Terms of service** and privacy policy
+- [ ] **Usage analytics** (anonymized)
+
+### Quality Assurance
+
+- [ ] **Unit tests** for all services
+- [ ] **Integration tests** for API endpoints
+- [ ] **Load testing** for expected traffic
+- [ ] **Error monitoring** (e.g., Sentry)
+- [ ] **Performance benchmarks** documented
+
+### Documentation
+
+- [ ] **API documentation** (Swagger/OpenAPI)
+- [ ] **Deployment guide** for ops team
+- [ ] **Incident response** playbook
+- [ ] **Model performance** metrics baseline
+- [ ] **Cost analysis** and optimization guide
 
 ## 💻 Code Examples
 

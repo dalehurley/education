@@ -75,6 +75,8 @@ async def hello():
 # Run with: uvicorn main:app --reload
 ```
 
+> **💡 Tip:** FastAPI works with both `async def` (asynchronous) and regular `def` (synchronous) functions. Use `async def` when doing I/O operations (database, API calls, file operations). For simple operations like the example above, regular `def` works fine too!
+
 That's it! Visit `http://localhost:8000/hello` and `http://localhost:8000/docs`
 
 ### 2. Path Parameters
@@ -117,6 +119,15 @@ async def get_comment(post_id: int, comment_id: int):
 # /users/abc returns validation error
 # /users/123 works perfectly
 ```
+
+> **⚠️ Route Order Matters:** When defining routes with path parameters, place more specific routes before generic ones:
+>
+> ```python
+> @app.get("/users/me")      # Specific - must come first
+> @app.get("/users/{user_id}")  # Generic - comes after
+> ```
+>
+> Otherwise, `/users/me` would match the `{user_id}` parameter as "me"!
 
 **Path Parameter Types:**
 
@@ -182,9 +193,12 @@ from fastapi import Query
 async def list_items_validated(
     skip: int = Query(0, ge=0),  # Greater than or equal to 0
     limit: int = Query(10, ge=1, le=100),  # Between 1 and 100
-    search: str = Query(None, min_length=3, max_length=50)
+    search: Optional[str] = Query(None, min_length=3, max_length=50)
 ):
     return {"skip": skip, "limit": limit, "search": search}
+
+# Validation error example: /items/validated?limit=200
+# Returns: {"detail": [{"loc": ["query", "limit"], "msg": "ensure this value is less than or equal to 100", "type": "value_error"}]}
 ```
 
 ### 4. Request Body with Pydantic
@@ -221,15 +235,18 @@ public function store(CreateUserRequest $request)
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 
+# Note: EmailStr requires: pip install email-validator
+# This example uses Pydantic v2 syntax
+
 # Schema (like Laravel Form Request)
 class UserCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    email: EmailStr
+    email: EmailStr  # Validates email format
     age: int = Field(..., ge=18)
     bio: Optional[str] = None
 
     class Config:
-        json_schema_extra = {
+        json_schema_extra = {  # Pydantic v2: was 'schema_extra' in v1
             "example": {
                 "name": "John Doe",
                 "email": "john@example.com",
@@ -269,6 +286,50 @@ async def create_user(user: UserCreate):
 - JSON Schema generation for docs
 - IDE autocomplete
 - Runtime validation
+
+> **💡 Modern Python Types:** This guide uses `Optional[str]` and `List[Type]` for compatibility. In Python 3.10+, you can use `str | None` and `list[Type]` instead. Both work in FastAPI!
+
+**What Validation Errors Look Like:**
+
+If you send invalid data to the endpoint above:
+
+```json
+POST /users
+{
+  "name": "",
+  "email": "not-an-email",
+  "age": 15
+}
+```
+
+You'll get a detailed error response:
+
+```json
+{
+  "detail": [
+    {
+      "type": "string_too_short",
+      "loc": ["body", "name"],
+      "msg": "String should have at least 1 character",
+      "input": ""
+    },
+    {
+      "type": "value_error",
+      "loc": ["body", "email"],
+      "msg": "value is not a valid email address",
+      "input": "not-an-email"
+    },
+    {
+      "type": "greater_than_equal",
+      "loc": ["body", "age"],
+      "msg": "Input should be greater than or equal to 18",
+      "input": 15
+    }
+  ]
+}
+```
+
+This makes debugging API calls much easier!
 
 ### 5. Response Models and Status Codes
 
@@ -322,7 +383,43 @@ async def create_user(user: UserCreate):
         )
 ```
 
-### 6. Organizing Routes (Like Laravel Route Groups)
+### 6. Understanding `async def` vs `def`
+
+**When to use each:**
+
+```python
+# Use regular def for:
+# - CPU-bound operations
+# - Synchronous libraries (some ORMs, legacy code)
+# - Simple operations without I/O
+
+@app.get("/calculate")
+def calculate_fibonacci(n: int):
+    # CPU-intensive work - blocking is fine
+    result = fibonacci(n)
+    return {"result": result}
+
+# Use async def for:
+# - I/O operations (database, APIs, files)
+# - Async libraries (httpx, aiofiles, asyncpg)
+# - High concurrency needs
+
+@app.get("/users")
+async def get_users():
+    # Async database query
+    users = await db.fetch_all("SELECT * FROM users")
+    return users
+
+@app.get("/external-data")
+async def fetch_external():
+    async with httpx.AsyncClient() as client:
+        response = await client.get("https://api.example.com/data")
+        return response.json()
+```
+
+**Performance Note:** FastAPI runs `def` endpoints in a thread pool, so they don't block the event loop. However, `async def` is more efficient for I/O-bound operations. Use what makes sense for your code!
+
+### 7. Organizing Routes (Like Laravel Route Groups)
 
 **Laravel:**
 
@@ -385,7 +482,7 @@ app = FastAPI(title="My API")
 app.include_router(api_router, prefix="/api/v1")
 ```
 
-### 7. Auto-Generated Documentation
+### 8. Auto-Generated Documentation
 
 **Laravel:**
 
@@ -428,11 +525,11 @@ async def get_user(user_id: int):
 # Visit /openapi.json for OpenAPI schema
 ```
 
-### 8. Complete Example: Blog API
+### 9. Complete Example: Blog API
 
 ```python
 # main.py
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
@@ -564,7 +661,7 @@ uvicorn main:app --reload
 
 Visit `http://localhost:8000/docs` for interactive API docs!
 
-### 9. CORS Configuration
+### 10. CORS Configuration
 
 **Laravel:**
 
@@ -602,6 +699,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 ```
+
+### 11. Dependency Injection Preview
+
+FastAPI has a powerful dependency injection system (covered in detail in Chapter 05). Here's a quick taste:
+
+**Laravel:**
+
+```php
+<?php
+// Inject dependencies in constructor or method
+public function index(UserService $userService)
+{
+    return $userService->getAllUsers();
+}
+```
+
+**FastAPI:**
+
+```python
+from fastapi import Depends
+
+# Define a dependency
+def get_db():
+    db = DatabaseConnection()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Use it in endpoints
+@app.get("/users")
+async def list_users(db = Depends(get_db)):
+    users = db.query("SELECT * FROM users")
+    return users
+
+# Dependencies can be shared across multiple endpoints
+# They're cached per request and support nested dependencies!
+```
+
+Benefits:
+
+- Reusable code
+- Automatic cleanup (context managers)
+- Easy testing (swap dependencies in tests)
+- Type hints for IDE support
+
+We'll explore this more in Chapter 05!
 
 ## 📝 Exercises
 

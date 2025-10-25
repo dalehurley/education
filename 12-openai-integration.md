@@ -9,7 +9,7 @@ By the end of this chapter, you will:
 - Set up OpenAI API integration with best practices
 - Use GPT models for chat completions and streaming
 - Implement function calling and structured outputs
-- Work with GPT-4 Vision for image understanding
+- Work with GPT-5 Vision for image understanding
 - Generate images with DALL-E 3
 - Create and manage embeddings
 - Handle rate limits, errors, and cost optimization
@@ -19,10 +19,10 @@ By the end of this chapter, you will:
 
 OpenAI provides state-of-the-art AI models accessible via API, including:
 
-- **GPT-5/GPT-5 Turbo**: Most advanced language models with 1M+ token context
-- **GPT-5 Vision**: Native multimodal model (text + images + video)
+- **Frontier models (GPT-5 family)**: `gpt-5`, `gpt-5-pro`, `gpt-5-mini`, `gpt-5-nano` — advanced models for most tasks
+- **Multimodal (Vision/Video)**: Handled natively by GPT-5 (text + images + video)
 - **DALL-E 3**: Advanced image generation
-- **Whisper**: Speech-to-text
+- **Audio (Whisper/TTS)**: Speech-to-text and text-to-speech
 - **Text Embeddings**: Semantic understanding (text-embedding-3 models)
 
 **Laravel Analogy**: Like using external APIs (Stripe, Twilio), but for AI capabilities. You make HTTP requests and get AI-powered responses.
@@ -55,7 +55,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     OPENAI_API_KEY: str
     OPENAI_ORG_ID: str | None = None
-    OPENAI_MODEL: str = "gpt-5-turbo"  # GPT-5 is the latest model
+    OPENAI_MODEL: str = "gpt-5"  # GPT-5 for coding and agentic tasks
     OPENAI_MAX_TOKENS: int = 4096
     OPENAI_TEMPERATURE: float = 0.7
 
@@ -89,6 +89,24 @@ class OpenAIService:
         return len(encoding.encode(text))
 ```
 
+#### Recommended: Use the Responses API for text and multimodal
+
+The Responses API is the preferred interface for GPT-5 across text, vision, tools, and structured outputs. See: [Models](https://platform.openai.com/docs/models), [Text](https://platform.openai.com/docs/guides/text), and [Latest model guidance](https://platform.openai.com/docs/guides/latest-model).
+
+```python
+from openai import OpenAI
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+def respond(prompt: str, model: str = "gpt-5") -> str:
+    response = client.responses.create(
+        model=model,
+        input=prompt,
+        temperature=0.7,
+    )
+    return response.output_text
+```
+
 ### 2. Chat Completions with Conversation History
 
 ```python
@@ -101,7 +119,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
-    model: str = "gpt-5-turbo"  # Use GPT-5 Turbo by default
+    model: str = "gpt-5"  # Use GPT-5 by default
     temperature: float = 0.7
     max_tokens: int = 4096
     stream: bool = False
@@ -110,7 +128,7 @@ class OpenAIService:
     async def chat_completion(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gpt-5-turbo",
+        model: str = "gpt-5",
         temperature: float = 0.7,
         max_tokens: int = 4096,
         response_format: Optional[Dict] = None
@@ -139,7 +157,7 @@ class OpenAIService:
     async def chat_stream(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gpt-5-turbo"
+        model: str = "gpt-5"
     ) -> AsyncIterator[str]:
         """Stream chat completion"""
         try:
@@ -293,7 +311,7 @@ class OpenAIService:
         while iteration < max_iterations:
             # Call OpenAI
             response = await self.client.chat.completions.create(
-                model="gpt-5-turbo",
+                model="gpt-5",
                 messages=messages,
                 tools=functions,
                 tool_choice="auto"  # GPT-5 has improved automatic tool selection
@@ -402,7 +420,7 @@ class OpenAIService:
         ]
 
         response = await self.client.chat.completions.create(
-            model="gpt-5-turbo",
+            model="gpt-5",
             messages=messages,
             response_format={"type": "json_object"},  # GPT-5 supports native JSON schema
             temperature=0
@@ -421,7 +439,7 @@ async def extract_review(text: str):
     return review
 ```
 
-### 5. GPT-4 Vision Integration
+### 5. Vision and Images via GPT-5
 
 ```python
 import base64
@@ -433,7 +451,7 @@ class OpenAIService:
         image_path: str,
         prompt: str = "What's in this image?"
     ) -> str:
-        """Analyze image with GPT-4 Vision"""
+        """Analyze image with GPT-5 Vision"""
 
         # Read and encode image
         with open(image_path, "rb") as image_file:
@@ -455,7 +473,7 @@ class OpenAIService:
         ]
 
         response = await self.client.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-5",
             messages=messages,
             max_tokens=500
         )
@@ -483,7 +501,7 @@ class OpenAIService:
         ]
 
         response = await self.client.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-5",
             messages=messages,
             max_tokens=500
         )
@@ -519,6 +537,8 @@ async def analyze_image_from_url(image_url: str, prompt: str = "Describe this im
     result = await openai_service.analyze_image_url(image_url, prompt)
     return {"analysis": result}
 ```
+
+Note: For new integrations, prefer the Responses API mode for images/vision as described in [Images & Vision (Responses API)](https://platform.openai.com/docs/guides/images-vision?api-mode=responses). GPT-5 models natively support multimodal inputs.
 
 ### 6. DALL-E 3 Image Generation
 
@@ -592,6 +612,35 @@ async def generate_image(
     return {"images": urls}
 ```
 
+### 6.1 Audio (Speech-to-Text and Text-to-Speech)
+
+See the [Audio guide](https://platform.openai.com/docs/guides/audio) for full options.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+# Transcribe (Whisper)
+def transcribe_audio(filepath: str) -> str:
+    with open(filepath, "rb") as f:
+        t = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+        )
+    return t.text
+
+# Text-to-Speech
+def synthesize_speech(text: str, voice: str = "alloy") -> bytes:
+    speech = client.audio.speech.create(
+        model="gpt-5-tts",  # select a current TTS-capable model
+        voice=voice,
+        input=text,
+        format="mp3",
+    )
+    return speech.read()
+```
+
 ### 7. Embeddings and Token Management
 
 ```python
@@ -644,22 +693,19 @@ class OpenAIService:
         self,
         input_tokens: int,
         output_tokens: int,
-        model: str = "gpt-5-turbo"
+        model: str = "gpt-5"
     ) -> float:
         """Calculate API call cost"""
 
         # Pricing as of 2025 (GPT-5 pricing)
         pricing = {
-            "gpt-5": {"input": 0.015, "output": 0.045},  # GPT-5 full model
-            "gpt-5-turbo": {"input": 0.008, "output": 0.024},  # GPT-5 Turbo
-            "gpt-4-turbo": {"input": 0.01, "output": 0.03},
-            "gpt-4": {"input": 0.03, "output": 0.06},
-            "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
-            "text-embedding-3-small": {"input": 0.00002, "output": 0},
-            "text-embedding-3-large": {"input": 0.00013, "output": 0},
+            "gpt-5": {"input": 0.015, "output": 0.045},  # GPT-5
+            "gpt-5-mini": {"input": 0.0001, "output": 0.0003},  # GPT-5 mini
+            "gpt-5-nano": {"input": 0.00005, "output": 0.00015},  # GPT-5 nano
+            "gpt-5-pro": {"input": 0.020, "output": 0.060},  # GPT-5 pro
         }
 
-        rates = pricing.get(model, pricing["gpt-5-turbo"])
+        rates = pricing.get(model, pricing["gpt-5"])
         input_cost = (input_tokens / 1000) * rates["input"]
         output_cost = (output_tokens / 1000) * rates["output"]
 
@@ -748,8 +794,8 @@ class ProductionOpenAIService(OpenAIService):
     async def completion_with_fallback(
         self,
         messages: List[Dict[str, str]],
-        primary_model: str = "gpt-5-turbo",
-        fallback_model: str = "gpt-4-turbo"
+        primary_model: str = "gpt-5",
+        fallback_model: str = "gpt-4.1"
     ) -> Dict:
         """Try primary model, fallback to cheaper model on failure"""
 
@@ -781,7 +827,7 @@ class GPT5Service(OpenAIService):
         self,
         document: str,
         task: str,
-        model: str = "gpt-5-turbo"
+        model: str = "gpt-5"
     ) -> str:
         """
         Process large documents with GPT-5's 1M+ token context
@@ -863,6 +909,10 @@ async def analyze_codebase(files: Dict[str, str], analysis_type: str = "architec
     return result
 ```
 
+### 11.1 Tools and Connectors (MCP) ⭐ NEW
+
+GPT-5 tools can integrate external systems via the Model Context Protocol (MCP), enabling secure connections to data sources, APIs, and services. See [Tools](https://platform.openai.com/docs/guides/tools) and [MCP connectors](https://platform.openai.com/docs/guides/tools-connectors-mcp). Prefer configuring connectors server-side rather than embedding secrets in prompts.
+
 ### 11. GPT-5 Parallel Function Execution ⭐ NEW
 
 ```python
@@ -871,7 +921,7 @@ class GPT5Service(OpenAIService):
         self,
         prompt: str,
         tools: List[Dict],
-        model: str = "gpt-5-turbo"
+        model: str = "gpt-5"
     ) -> Dict:
         """
         GPT-5 can execute multiple functions in parallel
@@ -998,7 +1048,7 @@ class GPT5Service(OpenAIService):
         self,
         prompt: str,
         response_schema: type[BaseModel],
-        model: str = "gpt-5-turbo"
+        model: str = "gpt-5"
     ) -> BaseModel:
         """
         GPT-5 native JSON schema validation
@@ -1079,7 +1129,7 @@ class GPT5Service(OpenAIService):
         self,
         video_path: str,
         prompt: str = "Describe what happens in this video",
-        model: str = "gpt-5-turbo"
+        model: str = "gpt-5"
     ) -> str:
         """
         Analyze video with GPT-5 (native multimodal)
@@ -1119,7 +1169,7 @@ class GPT5Service(OpenAIService):
         text: str,
         images: List[str] = None,
         videos: List[str] = None,
-        model: str = "gpt-5-turbo"
+        model: str = "gpt-5"
     ) -> str:
         """
         Analyze multiple media types together
@@ -1231,7 +1281,7 @@ async def create_gpt5_assistant():
     assistant = await client.beta.assistants.create(
         name="My GPT-5 Assistant",
         instructions="You are a helpful assistant powered by GPT-5",
-        model="gpt-5-turbo",  # Use GPT-5 for agents
+        model="gpt-5",  # Use GPT-5 for agents
         tools=[
             {"type": "code_interpreter"},
             {"type": "file_search"}  # GPT-5 enhanced file search
@@ -1246,12 +1296,13 @@ See **[Chapter 15: AI Agents with OpenAI](15-openai-agents.md)** for full Assist
 
 | Feature                 | **GPT-5**               | **Claude Sonnet 4.5** | **Gemini 2.0 Pro**           |
 | ----------------------- | ----------------------- | --------------------- | ---------------------------- |
-| **Context Window**      | 1M+ tokens              | 200K tokens           | 2M tokens                    |
+| **Context Window**      | 1M+ tokens              | 200K / 1M (beta)      | 2M tokens                    |
 | **Multimodal**          | Text + Image + Video    | Text + Image          | Text + Image + Video + Audio |
 | **Function Calling**    | ✅ Excellent (parallel) | ✅ Excellent          | ✅ Good                      |
 | **Best For**            | Complex reasoning       | Code generation       | Multimodal, grounding        |
-| **Unique Feature**      | Largest ecosystem       | Prompt caching        | Google Search grounding      |
-| **Cost (per M tokens)** | $8 / $24                | $3 / $15              | $1.25 / $5                   |
+| **Unique Feature**      | Largest ecosystem       | Extended thinking     | Google Search grounding      |
+| **Cost (per M tokens)** | $15 / $45               | $3 / $15              | $1.25 / $5                   |
+| **Max Output**          | 16K tokens              | 64K tokens            | 32K tokens                   |
 
 ### When to Use GPT-5
 
@@ -1335,3 +1386,11 @@ Learn how to integrate Claude and build multi-provider AI systems.
 - [Function Calling Guide](https://platform.openai.com/docs/guides/function-calling)
 - [Best Practices](https://platform.openai.com/docs/guides/best-practices)
 - [Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
+- [Models](https://platform.openai.com/docs/models)
+- [Text](https://platform.openai.com/docs/guides/text)
+- [Images & Vision (Responses API)](https://platform.openai.com/docs/guides/images-vision?api-mode=responses)
+- [Audio](https://platform.openai.com/docs/guides/audio)
+- [Latest Model Guidance](https://platform.openai.com/docs/guides/latest-model)
+- [Agents](https://platform.openai.com/docs/guides/agents)
+- [Tools](https://platform.openai.com/docs/guides/tools)
+- [Tools Connectors (MCP)](https://platform.openai.com/docs/guides/tools-connectors-mcp)

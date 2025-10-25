@@ -46,7 +46,7 @@ curl -X POST "http://localhost:8000/chat" \
       {"role": "system", "content": "You are a helpful assistant"},
       {"role": "user", "content": "Write a haiku about Python"}
     ],
-    "model": "gpt-4o"
+    "model": "gpt-5"
   }'
 ```
 
@@ -85,7 +85,7 @@ curl -X POST "http://localhost:8000/generate-image" \
 
 ```python
 response = openai.chat.completions.create(
-    model="gpt-4o",
+    model="gpt-5",
     messages=[
         {"role": "system", "content": "You are helpful"},
         {"role": "user", "content": "Hello!"}
@@ -97,7 +97,7 @@ response = openai.chat.completions.create(
 
 ```python
 stream = openai.chat.completions.create(
-    model="gpt-4o",
+    model="gpt-5",
     messages=messages,
     stream=True
 )
@@ -118,11 +118,13 @@ response = openai.images.generate(
 
 ## 📊 Model Comparison
 
-| Model       | Best For      | Context | Cost      |
-| ----------- | ------------- | ------- | --------- |
-| GPT-4o      | Complex tasks | 128K    | Higher    |
-| GPT-4o-mini | Simple tasks  | 128K    | Lower     |
-| DALL-E 3    | Images        | N/A     | Per image |
+| Model      | Best For                  | Context | Cost      |
+| ---------- | ------------------------- | ------- | --------- |
+| GPT-5      | Coding, agentic tasks     | 1M+     | Higher    |
+| GPT-5-mini | Well-defined tasks        | 200K    | Lower     |
+| GPT-5-nano | High-volume, simple tasks | Opt.    | Lowest    |
+| GPT-5-pro  | Highest precision         | 1M+     | Highest   |
+| DALL-E 3   | Images                    | N/A     | Per image |
 
 ## 🔗 Next Steps
 

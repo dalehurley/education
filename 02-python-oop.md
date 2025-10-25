@@ -58,8 +58,10 @@ echo $user->greet();
 **Python:**
 
 ```python
+from typing import Optional
+
 class User:
-    def __init__(self, name: str, age: int, email: str = None):
+    def __init__(self, name: str, age: int, email: Optional[str] = None):
         self.name = name
         self.age = age
         self.email = email
@@ -68,11 +70,11 @@ class User:
         return f"Hello, I'm {self.name}"
 
     @staticmethod
-    def admin():
+    def admin() -> 'User':
         return User("Admin", 0)
 
     @classmethod
-    def from_dict(cls, data: dict):
+    def from_dict(cls, data: dict) -> 'User':
         return cls(**data)  # Unpack dictionary
 
 # Usage
@@ -89,8 +91,13 @@ user = User.from_dict(data)
 - `self` is explicit (must be first parameter)
 - No access modifiers (public/private/protected)
 - Convention: prefix with `_` for private, `__` for name mangling
-- `@classmethod` receives the class as first parameter (`cls`)
-- `@staticmethod` doesn't receive class or instance
+- `@classmethod` receives the class as first parameter (`cls`) - useful for alternative constructors
+- `@staticmethod` doesn't receive class or instance - use for utility functions related to the class
+
+**When to use each:**
+
+- `@classmethod`: When you need access to the class itself (e.g., factory methods, alternative constructors)
+- `@staticmethod`: When you need a utility function that logically belongs to the class but doesn't need access to class or instance data
 
 ### 2. Inheritance
 
@@ -139,7 +146,7 @@ class Cat(Animal):
 
 # Multiple inheritance (Python supports this!)
 class Pet:
-    def play(self):
+    def play(self) -> str:
         return "Playing!"
 
 class FriendlyDog(Dog, Pet):  # Inherits from both
@@ -148,6 +155,9 @@ class FriendlyDog(Dog, Pet):  # Inherits from both
 dog = FriendlyDog("Buddy")
 print(dog.speak())  # Woof!
 print(dog.play())   # Playing!
+
+# Check method resolution order (MRO)
+print(FriendlyDog.__mro__)  # Shows the order Python searches for methods
 
 # Call parent method
 class Puppy(Dog):
@@ -229,8 +239,8 @@ class CreateUserRequest extends FormRequest {
 **Pydantic Model:**
 
 ```python
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field, field_validator, ValidationError
+from typing import Optional, List
 
 class CreateUserRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
@@ -238,22 +248,25 @@ class CreateUserRequest(BaseModel):
     age: int = Field(..., ge=18)  # Greater than or equal to 18
     tags: Optional[List[str]] = None
 
-    @validator('name')
-    def name_must_not_be_blank(cls, v):
+    @field_validator('name')
+    @classmethod
+    def name_must_not_be_blank(cls, v: str) -> str:
         if not v.strip():
             raise ValueError('Name cannot be blank')
         return v.strip()
 
-    @validator('age')
-    def age_must_be_reasonable(cls, v):
+    @field_validator('age')
+    @classmethod
+    def age_must_be_reasonable(cls, v: int) -> int:
         if v > 120:
             raise ValueError('Age must be realistic')
         return v
 
-    class Config:
+    model_config = {
         # Extra validation options
-        str_strip_whitespace = True
-        validate_assignment = True
+        'str_strip_whitespace': True,
+        'validate_assignment': True,
+    }
 
 # Usage
 data = {
@@ -281,6 +294,13 @@ except ValidationError as e:
 - Detailed error messages
 - JSON serialization/deserialization
 - FastAPI uses it for all request/response validation
+
+**Note:** These examples use **Pydantic v2** (the current version). Key differences from v1:
+
+- `@field_validator` instead of `@validator`
+- `model_config` dict instead of `class Config`
+- `@classmethod` decorator required on validators
+- Better performance and type safety
 
 ### 5. Magic Methods (Dunder Methods)
 
@@ -492,14 +512,21 @@ if __name__ == "__main__":
 #     return user
 ```
 
+**Key Concepts:**
+
+- `async def` creates a **coroutine function** (returns a coroutine object)
+- `await` pauses execution until the coroutine completes
+- `asyncio.gather()` runs multiple coroutines concurrently
+- `asyncio.run()` is the entry point for async programs
+
 **When to use async in FastAPI:**
 
-- ✅ Database queries (with async drivers)
-- ✅ HTTP API calls
-- ✅ File I/O
+- ✅ Database queries (with async drivers like `asyncpg`, `motor`)
+- ✅ HTTP API calls (with `httpx`, `aiohttp`)
+- ✅ File I/O (with `aiofiles`)
 - ✅ Any I/O-bound operations
-- ❌ CPU-intensive calculations (use regular functions)
-- ❌ Calling sync libraries (use regular functions)
+- ❌ CPU-intensive calculations (use regular functions or `asyncio.to_thread()`)
+- ❌ Calling sync libraries (use regular functions or wrap with `asyncio.to_thread()`)
 
 ### 8. Context Managers
 
@@ -539,6 +566,8 @@ with Session(engine) as session:
     # Session automatically closed
 
 # Custom context manager
+import time
+
 class Timer:
     def __enter__(self):
         self.start = time.time()
@@ -843,6 +872,9 @@ Create a `ShoppingCart` class with:
 - Use magic methods for nice syntax
 
 ```python
+from dataclasses import dataclass
+from typing import List
+
 @dataclass
 class Product:
     name: str
@@ -869,6 +901,7 @@ Create an async function that fetches data from multiple URLs concurrently:
 ```python
 import asyncio
 import httpx
+from typing import List
 
 async def fetch_all(urls: List[str]) -> List[str]:
     # Your implementation
@@ -902,6 +935,34 @@ with DatabaseConnection("mydb") as db:
 
 ## 🎓 Advanced Topics (Reference)
 
+### Slots (Memory Optimization)
+
+```python
+# Regular class (uses __dict__ for attributes)
+class RegularUser:
+    def __init__(self, name: str, email: str):
+        self.name = name
+        self.email = email
+
+# Slots class (more memory efficient, faster attribute access)
+class OptimizedUser:
+    __slots__ = ['name', 'email']  # Only these attributes allowed
+
+    def __init__(self, name: str, email: str):
+        self.name = name
+        self.email = email
+
+# Use __slots__ when:
+# - Creating many instances of a class
+# - Memory is a concern
+# - Attributes are known in advance
+#
+# Trade-offs:
+# - Can't add new attributes dynamically
+# - Can't use __dict__
+# - Slight complexity increase
+```
+
 ### Metaclasses
 
 ```python
@@ -920,39 +981,75 @@ class Database(metaclass=Singleton):
 ### Descriptors
 
 ```python
+from typing import Any, Optional
+
 class ValidatedString:
     def __init__(self, min_length: int = 0):
         self.min_length = min_length
+        self.name = ""
 
-    def __set_name__(self, owner, name):
+    def __set_name__(self, owner: type, name: str) -> None:
         self.name = f"_{name}"
 
-    def __get__(self, obj, type):
+    def __get__(self, obj: Optional[Any], objtype: Optional[type] = None) -> str:
+        if obj is None:
+            return self  # type: ignore
         return getattr(obj, self.name)
 
-    def __set__(self, obj, value):
+    def __set__(self, obj: Any, value: str) -> None:
         if len(value) < self.min_length:
-            raise ValueError(f"Too short")
+            raise ValueError(f"Must be at least {self.min_length} characters")
         setattr(obj, self.name, value)
 
 class User:
     name = ValidatedString(min_length=3)
+
+    def __init__(self, name: str):
+        self.name = name  # Uses descriptor validation
+
+# Usage
+user = User("Alice")  # OK
+# user2 = User("Al")  # Raises ValueError: Must be at least 3 characters
 ```
 
-### Type Annotations
+### Type Annotations & Generics
 
 ```python
-from typing import TypeVar, Generic, Protocol
+from typing import TypeVar, Generic, Protocol, List, Optional
 
+# Generic repository pattern
 T = TypeVar('T')
 
 class Repository(Generic[T]):
-    def get(self, id: int) -> T:
-        pass
+    def __init__(self):
+        self._items: List[T] = []
 
+    def add(self, item: T) -> None:
+        self._items.append(item)
+
+    def get(self, index: int) -> Optional[T]:
+        if 0 <= index < len(self._items):
+            return self._items[index]
+        return None
+
+    def all(self) -> List[T]:
+        return self._items.copy()
+
+# Usage with specific types
+user_repo: Repository[User] = Repository()
+user_repo.add(User(name="Alice", age=30))
+
+# Protocol (structural subtyping - like TypeScript interfaces)
 class Comparable(Protocol):
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: 'Comparable') -> bool:
         ...
+
+def get_min(items: List[Comparable]) -> Comparable:
+    """Works with any type that implements __lt__"""
+    return min(items)
+
+# Any class with __lt__ satisfies the Comparable protocol
+# No explicit inheritance needed!
 ```
 
 ## 💻 Code Examples
