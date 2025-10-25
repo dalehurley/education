@@ -807,6 +807,42 @@ class AgentEvaluator:
         return results
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-15/standalone/`](code-examples/chapter-15/standalone/)
+
+A **Research Agent** demonstrating:
+
+- Assistants API
+- Multi-tool agent
+- Reasoning chains
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-15/standalone
+pip install -r requirements.txt
+export OPENAI_API_KEY="your-key"
+uvicorn research_agent:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-15/progressive/`](code-examples/chapter-15/progressive/)
+
+**Task Manager v15** - Adds OpenAI Agent to v14:
+
+- Conversational task management with GPT-5 Assistants API
+- Function calling for task creation, update, deletion
+- Multi-step reasoning for complex requests
+- Agent memory and context management
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 16: AI Agents with Claude](16-claude-agents.md)

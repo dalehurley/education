@@ -867,6 +867,42 @@ Build a vector DB migration tool:
 - **Serverless**: Pinecone scales to zero when not in use
 - **Self-hosted**: Qdrant/Weaviate for high-volume workloads
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-14/standalone/`](code-examples/chapter-14/standalone/)
+
+A **Semantic Search Engine** demonstrating:
+
+- Multi-provider embeddings
+- Pinecone/ChromaDB
+- Similarity search
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-14/standalone
+pip install -r requirements.txt
+export OPENAI_API_KEY="your-key"
+uvicorn semantic_search:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-14/progressive/`](code-examples/chapter-14/progressive/)
+
+**Task Manager v14** - Adds semantic search to v13:
+
+- OpenAI embeddings for semantic search
+- ChromaDB vector storage
+- Semantic search for tasks and documents
+- Hybrid search (keyword + semantic)
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 15: AI Agents with OpenAI](15-openai-agents.md)

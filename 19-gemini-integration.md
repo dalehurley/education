@@ -1381,6 +1381,43 @@ async def grounded_image_analysis(image_path: str, question: str):
     return response
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-19/standalone/`](code-examples/chapter-19/standalone/)
+
+A **Multimodal Content Analyzer** demonstrating:
+
+- Gemini Pro/Flash/Ultra
+- Video analysis
+- Google Search grounding
+- Code execution
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-19/standalone
+pip install -r requirements.txt
+export GOOGLE_API_KEY="your-key"
+uvicorn multimodal_analyzer:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-19/progressive/`](code-examples/chapter-19/progressive/)
+
+**Task Manager v19** - Adds Gemini multimodal to v18 (FINAL):
+
+- Multimodal analysis (text + images) for task context
+- Google Search grounding for real-time information
+- Gemini API integration for advanced AI capabilities
+- Context caching for efficient multimodal interactions
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)** for the ultimate production-ready SaaS combining ALL concepts from chapters 1-19!
+
 ## 🔗 Next Steps
 
 **Previous Chapter:** [Chapter 18: Production AI/ML & MLOps](18-production-mlops.md)

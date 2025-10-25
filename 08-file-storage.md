@@ -723,6 +723,51 @@ async def upload_chunked(
     return {"status": "chunk_received", "chunk": chunk_number}
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-08/standalone/`](code-examples/chapter-08/standalone/)
+
+A **Document Manager API** demonstrating:
+
+- Local file storage
+- AWS S3 integration
+- Image optimization and resizing
+- File validation
+- Storage abstraction layer
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-08/standalone
+pip install -r requirements.txt
+# Optional: Configure S3 credentials
+uvicorn document_manager:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-08/progressive/`](code-examples/chapter-08/progressive/)
+
+**Task Manager v8** - Adds cloud storage to v7:
+
+- S3-compatible storage for attachments
+- Image optimization
+- Storage interface pattern
+- Secure file access
+
+### Code Snippets
+
+📁 [`code-examples/chapter-08/snippets/`](code-examples/chapter-08/snippets/)
+
+- **`storage_interface.py`** - Storage abstraction layer
+- **`image_processing.py`** - Image manipulation patterns
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 09: Background Jobs & Task Queues](09-background-jobs.md)

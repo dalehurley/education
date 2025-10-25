@@ -899,6 +899,44 @@ Build a complete production AI application that includes:
    - Data export
    - GDPR compliance
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-18/standalone/`](code-examples/chapter-18/standalone/)
+
+An **ML Model Serving Platform** demonstrating:
+
+- Model deployment
+- Monitoring
+- A/B testing
+- Cost optimization
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-18/standalone
+pip install -r requirements.txt
+export OPENAI_API_KEY="your-key"
+export ANTHROPIC_API_KEY="your-key"
+uvicorn ml_serving_platform:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-18/progressive/`](code-examples/chapter-18/progressive/)
+
+**Task Manager v18** - Makes v17 production-ready:
+
+- Model registry and versioning
+- A/B testing (70/30 split) for AI features
+- Monitoring and logging for AI performance
+- Deployment strategies for AI models
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)** for the final production-ready SaaS combining all concepts from chapters 1-18.
+
 ## 🎓 Congratulations!
 
 You've completed the FastAPI AI/ML Education Curriculum! You now have the skills to:

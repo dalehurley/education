@@ -286,6 +286,49 @@ Implement social authentication:
 - GitHub OAuth2
 - Link social accounts to existing users
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-11/standalone/`](code-examples/chapter-11/standalone/)
+
+A **Multi-Tenant SaaS API** demonstrating:
+
+- OAuth2 password flow
+- JWT and refresh tokens
+- Multi-tenant architecture
+- Role-based access control (RBAC)
+- Social authentication patterns
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-11/standalone
+pip install -r requirements.txt
+uvicorn multitenant_saas:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-11/progressive/`](code-examples/chapter-11/progressive/)
+
+**Task Manager v11** - Adds OAuth & multi-tenancy to v10:
+
+- OAuth2 authentication
+- Workspace isolation
+- Team collaboration
+- Permission system
+
+### Code Snippets
+
+📁 [`code-examples/chapter-11/snippets/`](code-examples/chapter-11/snippets/)
+
+- **`jwt_auth.py`** - JWT authentication patterns
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 12: OpenAI Integration](12-openai-integration.md)

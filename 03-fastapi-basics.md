@@ -682,6 +682,54 @@ async def download():
     return FileResponse("path/to/file.pdf", filename="document.pdf")
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-03/standalone/`](code-examples/chapter-03/standalone/)
+
+A complete **Blog API** (in-memory) demonstrating:
+
+- REST API endpoints (GET, POST, PUT, DELETE)
+- Pydantic request/response models
+- Path and query parameters
+- Status codes and error handling
+- Auto-generated documentation (Swagger UI)
+- CORS middleware
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-03/standalone
+pip install -r requirements.txt
+uvicorn blog_api:app --reload
+```
+
+Visit: http://localhost:8000/docs
+
+### Progressive Application
+
+📁 [`code-examples/chapter-03/progressive/`](code-examples/chapter-03/progressive/)
+
+**Task Manager v3** - Converts v2 CLI to REST API with:
+
+- All CRUD operations via HTTP
+- JSON request/response
+- Query parameter filtering
+- Auto-generated documentation
+
+### Code Snippets
+
+📁 [`code-examples/chapter-03/snippets/`](code-examples/chapter-03/snippets/)
+
+- **`rest_api_patterns.py`** - Complete CRUD REST API patterns
+- **`response_models.py`** - Different response types and status codes
+- **`query_parameters.py`** - Advanced query parameter handling
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 You now understand FastAPI basics!

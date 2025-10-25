@@ -671,6 +671,51 @@ celery_app.conf.update(
 )
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-09/standalone/`](code-examples/chapter-09/standalone/)
+
+An **Email Campaign Service** demonstrating:
+
+- Celery task queues
+- Background job processing
+- Scheduled tasks with Celery Beat
+- Task monitoring and retries
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-09/standalone
+pip install -r requirements.txt
+# Terminal 1: redis-server
+# Terminal 2: celery -A email_campaign worker --loglevel=info
+# Terminal 3: celery -A email_campaign beat --loglevel=info
+# Terminal 4: uvicorn email_campaign:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-09/progressive/`](code-examples/chapter-09/progressive/)
+
+**Task Manager v9** - Adds background jobs to v8:
+
+- Email notifications for tasks
+- Scheduled reminders
+- Job monitoring
+- Celery integration
+
+### Code Snippets
+
+📁 [`code-examples/chapter-09/snippets/`](code-examples/chapter-09/snippets/)
+
+- **`celery_tasks.py`** - Celery task patterns
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 10: Caching Strategies](10-caching.md)

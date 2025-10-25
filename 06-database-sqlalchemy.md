@@ -719,6 +719,53 @@ async def bulk_create(db: AsyncSession, users: list):
     await db.commit()
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-06/standalone/`](code-examples/chapter-06/standalone/)
+
+A **Blog with Database** demonstrating:
+
+- SQLAlchemy ORM models
+- Relationships (one-to-many, many-to-many)
+- CRUD operations
+- Query patterns
+- Database sessions
+- Transactions
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-06/standalone
+pip install -r requirements.txt
+python blog_database.py
+uvicorn blog_database:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-06/progressive/`](code-examples/chapter-06/progressive/)
+
+**Task Manager v6** - Replaces JSON storage with PostgreSQL/SQLite:
+
+- SQLAlchemy models for User and Task
+- Relationships between users and tasks
+- Database session management
+- All CRUD operations via database
+
+### Code Snippets
+
+📁 [`code-examples/chapter-06/snippets/`](code-examples/chapter-06/snippets/)
+
+- **`sqlalchemy_models.py`** - Model definitions with relationships
+- **`crud_operations.py`** - Common database CRUD operations
+- **`query_patterns.py`** - Advanced query patterns
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 07: Migrations & Seeders](07-migrations-seeders.md)

@@ -1278,6 +1278,43 @@ Build an image analysis system:
 - Compare results
 - Extract structured data
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-13/standalone/`](code-examples/chapter-13/standalone/)
+
+A **Code Review Assistant** demonstrating:
+
+- Claude Sonnet 4.5
+- Extended thinking
+- Tool use
+- Prompt caching
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-13/standalone
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY="your-key"
+uvicorn code_review_assistant:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-13/progressive/`](code-examples/chapter-13/progressive/)
+
+**Task Manager v13** - Adds Claude code analysis to v12:
+
+- Extended thinking for analysis
+- Workload insights and prioritization
+- Anthropic API integration
+- Prompt engineering for complex tasks
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 14: Vector Databases & Embeddings](14-vector-databases.md)

@@ -1276,6 +1276,50 @@ See **[Chapter 15: AI Agents with OpenAI](15-openai-agents.md)** for full Assist
 - ✅ Native code execution
 - ✅ Cost-sensitive applications
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-12/standalone/`](code-examples/chapter-12/standalone/)
+
+An **AI Writing Assistant** demonstrating:
+
+- GPT-5 chat completions
+- Streaming responses
+- Function calling
+- DALL-E image generation
+- Embeddings for semantic search
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-12/standalone
+pip install -r requirements.txt
+export OPENAI_API_KEY="your-key"
+uvicorn writing_assistant:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-12/progressive/`](code-examples/chapter-12/progressive/)
+
+**Task Manager v12** - Adds OpenAI AI to v11:
+
+- AI task suggestions
+- Description enhancement
+- Auto-categorization
+- Smart search
+
+### Code Snippets
+
+📁 [`code-examples/chapter-12/snippets/`](code-examples/chapter-12/snippets/)
+
+- **`openai_patterns.py`** - OpenAI API patterns
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 13: Claude/Anthropic Integration](13-claude-integration.md)

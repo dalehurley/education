@@ -955,6 +955,54 @@ class Comparable(Protocol):
         ...
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-02/standalone/`](code-examples/chapter-02/standalone/)
+
+A **Shopping Cart System** demonstrating:
+
+- Classes and inheritance
+- Dataclasses for clean data structures
+- Pydantic models for validation
+- Property decorators
+- Magic methods (`__str__`, `__repr__`, `__add__`)
+- Context managers
+- Abstract base classes
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-02/standalone
+pip install -r requirements.txt
+python shopping_cart.py
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-02/progressive/`](code-examples/chapter-02/progressive/)
+
+**Task Manager v2** - OOP refactor of v1 with:
+
+- Dataclasses for Task model
+- Pydantic validation for input
+- Abstract storage interface
+- Property decorators for computed attributes
+- Context managers for auto-save
+
+### Code Snippets
+
+📁 [`code-examples/chapter-02/snippets/`](code-examples/chapter-02/snippets/)
+
+- **`dataclass_example.py`** - Dataclass patterns and usage
+- **`pydantic_validation.py`** - Validation with Pydantic models
+- **`async_patterns.py`** - Async/await and concurrent operations
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)** for the full implementation.
+
 ## 🔗 Next Steps
 
 You now understand Python's OOP and modern features!

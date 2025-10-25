@@ -287,6 +287,50 @@ Create a system to cache database query results:
 - Smart invalidation
 - Time-based and event-based expiration
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-10/standalone/`](code-examples/chapter-10/standalone/)
+
+A **News Aggregator API** demonstrating:
+
+- Redis caching
+- Response caching patterns
+- Cache invalidation strategies
+- Cache-aside pattern
+- Performance optimization
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-10/standalone
+pip install -r requirements.txt
+# Terminal 1: redis-server
+# Terminal 2: uvicorn news_aggregator:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-10/progressive/`](code-examples/chapter-10/progressive/)
+
+**Task Manager v10** - Adds caching to v9:
+
+- Redis response caching
+- Query result caching
+- Cache invalidation on updates
+- Performance monitoring
+
+### Code Snippets
+
+📁 [`code-examples/chapter-10/snippets/`](code-examples/chapter-10/snippets/)
+
+- **`cache_patterns.py`** - Redis caching strategies
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 11: Authentication & Authorization](11-authentication.md)

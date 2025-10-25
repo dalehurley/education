@@ -673,6 +673,42 @@ Build an agent that:
 - Creates deployment plan
 - Monitors results
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-16/standalone/`](code-examples/chapter-16/standalone/)
+
+A **Code Generation Agent** demonstrating:
+
+- Claude agent patterns
+- Self-validation
+- Tool chaining
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-16/standalone
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY="your-key"
+uvicorn code_generation_agent:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-16/progressive/`](code-examples/chapter-16/progressive/)
+
+**Task Manager v16** - Adds Claude agent to v15:
+
+- Extended thinking agent for strategic task planning
+- Tool chaining for complex workflows
+- Code generation with self-validation for task automation
+- Human-in-the-loop approval
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 17: RAG & Advanced AI Features](17-rag-features.md)

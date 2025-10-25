@@ -726,6 +726,51 @@ async def get_db_with_transaction():
             # Auto-rollback if exception
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-05/standalone/`](code-examples/chapter-05/standalone/)
+
+An **Authentication API** demonstrating:
+
+- JWT token generation and validation
+- Dependency injection patterns
+- Custom dependencies
+- Middleware (logging, timing, CORS)
+- Role-based access control
+- Protected routes
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-05/standalone
+pip install -r requirements.txt
+uvicorn auth_api:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-05/progressive/`](code-examples/chapter-05/progressive/)
+
+**Task Manager v5** - Adds authentication to v4:
+
+- JWT authentication
+- User-specific tasks
+- Request logging middleware
+- Dependency injection for auth
+
+### Code Snippets
+
+📁 [`code-examples/chapter-05/snippets/`](code-examples/chapter-05/snippets/)
+
+- **`dependency_injection.py`** - Common DI patterns
+- **`middleware_patterns.py`** - Middleware examples
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 06: Database with SQLAlchemy](06-database-sqlalchemy.md)

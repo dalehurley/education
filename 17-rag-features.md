@@ -901,6 +901,50 @@ Build an intelligent support bot:
 4. **Monitoring**: Track latency, relevance, and user satisfaction
 5. **Feedback Loop**: Collect user feedback to improve retrieval
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-17/standalone/`](code-examples/chapter-17/standalone/)
+
+A **Knowledge Base QA System** demonstrating:
+
+- Complete RAG pipeline
+- Document ingestion and chunking
+- Vector storage with ChromaDB
+- Semantic retrieval
+- Answer generation with context
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-17/standalone
+pip install -r requirements.txt
+export OPENAI_API_KEY="your-key"
+uvicorn knowledge_base_qa:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-17/progressive/`](code-examples/chapter-17/progressive/)
+
+**Task Manager v17** - Adds RAG documentation to v16:
+
+- Upload documentation
+- Semantic search in docs
+- AI-powered Q&A
+- Source attribution
+
+### Code Snippets
+
+📁 [`code-examples/chapter-17/snippets/`](code-examples/chapter-17/snippets/)
+
+- **`rag_pipeline.py`** - Complete RAG implementation
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 18: Production AI/ML & MLOps](18-production-mlops.md)

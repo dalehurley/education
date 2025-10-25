@@ -743,6 +743,51 @@ def test_migration_upgrade_downgrade():
     command.upgrade(alembic_cfg, "head")
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-07/standalone/`](code-examples/chapter-07/standalone/)
+
+An **E-commerce Catalog API** demonstrating:
+
+- Alembic migrations
+- Database seeding with Faker
+- Factory patterns for test data
+- Migration version control
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-07/standalone
+pip install -r requirements.txt
+alembic upgrade head
+python seed.py
+uvicorn ecommerce_catalog:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-07/progressive/`](code-examples/chapter-07/progressive/)
+
+**Task Manager v7** - Adds migrations to v6:
+
+- Alembic configuration
+- Migration scripts
+- Database seeders
+- Version control for schema
+
+### Code Snippets
+
+📁 [`code-examples/chapter-07/snippets/`](code-examples/chapter-07/snippets/)
+
+- **`migration_example.py`** - Migration patterns and examples
+- **`database_seeder.py`** - Database seeding with factories
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 08: File Storage & Management](08-file-storage.md)

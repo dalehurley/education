@@ -770,6 +770,52 @@ async def send_notification(
     return {"message": "Email will be sent"}
 ```
 
+## 💻 Code Examples
+
+### Standalone Application
+
+📁 [`code-examples/chapter-04/standalone/`](code-examples/chapter-04/standalone/)
+
+A **File Management API** demonstrating:
+
+- File uploads and downloads
+- Form data handling
+- Multiple response types (JSON, files, streams)
+- Request validation
+- File streaming
+- CSV export
+
+**Run it:**
+
+```bash
+cd code-examples/chapter-04/standalone
+pip install -r requirements.txt
+uvicorn file_manager_api:app --reload
+```
+
+### Progressive Application
+
+📁 [`code-examples/chapter-04/progressive/`](code-examples/chapter-04/progressive/)
+
+**Task Manager v4** - Adds file attachments to v3:
+
+- Upload files to tasks
+- Download attachments
+- CSV export of tasks
+- Form-based task creation
+
+### Code Snippets
+
+📁 [`code-examples/chapter-04/snippets/`](code-examples/chapter-04/snippets/)
+
+- **`file_upload.py`** - File upload/download patterns
+- **`form_handling.py`** - HTML form data processing
+- **`streaming_responses.py`** - Streaming large responses
+
+### Comprehensive Application
+
+See **[TaskForce Pro](code-examples/comprehensive-app/)**.
+
 ## 🔗 Next Steps
 
 **Next Chapter:** [Chapter 05: Dependency Injection & Middleware](05-dependency-injection-middleware.md)
